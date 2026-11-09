@@ -34,3 +34,4 @@ services:
         value: https://innovator123-sudo.github.io
       - key: LOG_LEVEL
         value: info
+

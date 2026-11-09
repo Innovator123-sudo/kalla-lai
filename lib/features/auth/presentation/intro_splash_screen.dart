@@ -70,11 +70,11 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       controller
         ..setLooping(false)
         ..addListener(_handleVideoUpdate);
-      // Start muted: browsers commonly reject autoplay with audio, while muted
-      // playback is permitted. Sound can be enabled with the visible Sound
-      // button or a tap after playback has started.
-      await controller.setVolume(0);
-      _soundBlocked = true;
+      // Play with sound immediately. The index.html autoplay script already
+      // sets the video muted + playsInline so the browser allows it; once
+      // Flutter takes over we restore full volume immediately.
+      await controller.setVolume(1.0);
+      _soundBlocked = false;
       await controller.play();
       if (!mounted) return;
       _loadingVideo = false;
@@ -235,13 +235,7 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () {
-          if (_soundBlocked) {
-            _enableSound();
-            return;
-          }
-          _finish();
-        },
+        onTap: _finish,
         child: LayoutBuilder(
           builder: (context, outer) {
             // Fill the whole viewport. The clip is a portrait 9:16 video drawn
@@ -265,7 +259,6 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
                       _buildVideo(controller)
                     else
                       _buildFallbackLogo(logoWidth),
-                    if (_soundBlocked && hasVideo) _buildSoundButton(),
                   ],
                 ),
               ),

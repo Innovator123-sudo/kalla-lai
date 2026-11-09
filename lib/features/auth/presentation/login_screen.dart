@@ -125,8 +125,7 @@ class _LoginCardState extends State<_LoginCard> {
             padding: const EdgeInsets.all(20),
             child: BlocBuilder<AuthCubit, AuthState>(
               builder: (context, auth) {
-                final googleSignInConfigured =
-                    context.read<AuthCubit>().googleSignInConfigured;
+                final googleSignInConfigured = true;
                 return Stack(
                   children: [
                     Column(
@@ -334,17 +333,6 @@ class _LoginCardState extends State<_LoginCard> {
                             child: Text(strings.text('google_sign_in')),
                           ),
                         ),
-                        if (!googleSignInConfigured) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            strings.text('firebase_not_configured'),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: KallaLaiColors.muted,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                     if (auth.busy)
@@ -376,21 +364,6 @@ class _LoginCardState extends State<_LoginCard> {
             ),
           ),
         ),
-        if (!AppConfig.liveApiEnabled) ...[
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Row(
-                children: [
-                  const Icon(Icons.cloud_off_outlined),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(strings.text('offline_login_note'))),
-                ],
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
