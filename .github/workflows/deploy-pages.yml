@@ -25,7 +25,11 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build web --release --base-href "/kalla-lai/" --dart-define=KALLALAI_LIVE_API=false
+      - run: |
+          flutter build web --release \
+            --base-href "/kalla-lai/" \
+            --dart-define=KALLALAI_LIVE_API=true \
+            --dart-define=KALLALAI_API_URL=${{ vars.API_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web

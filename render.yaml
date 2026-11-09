@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: kalla-lai-api
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    region: singapore   # closest free-tier region to Nepal
+    plan: free
+    branch: master
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "8080"
+      - key: AUTO_MIGRATE
+        value: "true"
+      - key: TRUST_PROXY
+        value: "true"
+      - key: DEMO_MODE
+        value: "false"
+      # --- Set these in Render Dashboard → Environment ---
+      - key: DATABASE_URL
+        sync: false          # paste your Supabase DB connection string
+      - key: REDIS_URL
+        sync: false          # paste your Upstash Redis URL
+      - key: JWT_ACCESS_SECRET
+        generateValue: true  # Render auto-generates a secure random value
+      - key: PAYMENT_WEBHOOK_SECRET
+        generateValue: true
+      - key: FIREBASE_PROJECT_ID
+        value: kalla-lai
+      - key: CORS_ORIGINS
+        value: https://innovator123-sudo.github.io
+      - key: LOG_LEVEL
+        value: info
