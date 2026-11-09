@@ -70,38 +70,25 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       controller
         ..setLooping(false)
         ..addListener(_handleVideoUpdate);
-      // Attempt play with sound first. If the browser blocks unmuted autoplay
-      // (common on initial page load without prior interaction), immediately
-      // fall back to muted autoplay so the video ALWAYS plays smoothly.
-      try {
-        await controller.setVolume(1.0);
-        await controller.play();
-        _soundBlocked = false;
-      } catch (_) {
-        try {
-          await controller.setVolume(0);
-          await controller.play();
-          _soundBlocked = true;
-        } catch (_) {}
-      }
+      // Always start muted — every browser permits muted autoplay without
+      // any prior user interaction. A "Sound" button lets the user unmute
+      // after the first gesture. Trying unmuted first silently fails in
+      // Brave / Chrome without throwing, so we never catch the rejection.
+      await controller.setVolume(0);
+      _soundBlocked = true;
+      await controller.play();
       if (!mounted) return;
       _loadingVideo = false;
       setState(() {});
 
+      // Give the player 700 ms to actually start. If it still isn't playing
+      // by then (e.g. the asset failed to fetch) show the fallback logo.
       await Future<void>.delayed(const Duration(milliseconds: 700));
       if (!mounted) return;
       if (!controller.value.hasError && !controller.value.isPlaying) {
-        // Try muted playback so the browser allows it immediately
-        try {
-          await controller.setVolume(0);
-          await controller.play();
-          _soundBlocked = true;
-          setState(() {});
-        } catch (_) {
-          _videoFailed = true;
-          _loadingVideo = false;
-          setState(() {});
-        }
+        _videoFailed = true;
+        _loadingVideo = false;
+        setState(() {});
       }
     } catch (_) {
       if (!mounted) return;
