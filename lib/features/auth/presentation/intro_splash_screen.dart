@@ -70,12 +70,20 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       controller
         ..setLooping(false)
         ..addListener(_handleVideoUpdate);
-      // Play with sound immediately. The index.html autoplay script already
-      // sets the video muted + playsInline so the browser allows it; once
-      // Flutter takes over we restore full volume immediately.
-      await controller.setVolume(1.0);
-      _soundBlocked = false;
-      await controller.play();
+      // Attempt play with sound first. If the browser blocks unmuted autoplay
+      // (common on initial page load without prior interaction), immediately
+      // fall back to muted autoplay so the video ALWAYS plays smoothly.
+      try {
+        await controller.setVolume(1.0);
+        await controller.play();
+        _soundBlocked = false;
+      } catch (_) {
+        try {
+          await controller.setVolume(0);
+          await controller.play();
+          _soundBlocked = true;
+        } catch (_) {}
+      }
       if (!mounted) return;
       _loadingVideo = false;
       setState(() {});
@@ -83,11 +91,17 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       await Future<void>.delayed(const Duration(milliseconds: 700));
       if (!mounted) return;
       if (!controller.value.hasError && !controller.value.isPlaying) {
-        // Some browsers defer the first play() until a gesture. Keep the
-        // fallback controls visible so the user can explicitly retry/skip.
-        _videoFailed = true;
-        _loadingVideo = false;
-        setState(() {});
+        // Try muted playback so the browser allows it immediately
+        try {
+          await controller.setVolume(0);
+          await controller.play();
+          _soundBlocked = true;
+          setState(() {});
+        } catch (_) {
+          _videoFailed = true;
+          _loadingVideo = false;
+          setState(() {});
+        }
       }
     } catch (_) {
       if (!mounted) return;
@@ -235,7 +249,13 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: _finish,
+        onTap: () {
+          if (_soundBlocked) {
+            _enableSound();
+            return;
+          }
+          _finish();
+        },
         child: LayoutBuilder(
           builder: (context, outer) {
             // Fill the whole viewport. The clip is a portrait 9:16 video drawn
@@ -259,6 +279,7 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
                       _buildVideo(controller)
                     else
                       _buildFallbackLogo(logoWidth),
+                    if (_soundBlocked && hasVideo) _buildSoundButton(),
                   ],
                 ),
               ),

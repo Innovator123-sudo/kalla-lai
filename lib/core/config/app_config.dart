@@ -11,7 +11,7 @@ abstract final class AppConfig {
   /// the local development API when no URL is configured.
   static const apiBaseUrl = String.fromEnvironment(
     'KALLALAI_API_URL',
-    defaultValue: '',
+    defaultValue: 'https://when-moss-isa-semiconductor.trycloudflare.com',
   );
 
   /// Set `--dart-define=KALLALAI_LIVE_API=false` to run the offline demo data.

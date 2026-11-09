@@ -35,6 +35,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/kalla_lai_logo.png
-    - assets/videos/output.mp4
+    - assets/videos/video_1083905.mp4
     - assets/videos/loading.mp4
     - assets/videos/loading.webm
+    - assets/videos/output.mp4

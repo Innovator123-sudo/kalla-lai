@@ -56,6 +56,7 @@ app.*.map.json
 # Node / API related
 node_modules/
 server/.data/
+server/dist/
 
 # Deployment copy (kept out of the repo; rebuilt from source when needed)
 deploy-live/

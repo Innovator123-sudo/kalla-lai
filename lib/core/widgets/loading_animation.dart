@@ -9,6 +9,7 @@ import 'package:video_player/video_player.dart';
 /// fallback for Chromium builds compiled without proprietary codecs
 /// (Electron / in-app preview panels) that cannot decode H.264 + AAC.
 const List<String> introVideoAssets = <String>[
+  'assets/videos/video_1083905.mp4',
   'assets/videos/loading.mp4',
   'assets/videos/loading.webm',
 ];
