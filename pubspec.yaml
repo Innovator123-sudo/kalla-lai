@@ -1,0 +1,40 @@
+name: kalla_lai
+description: A Flutter client scaffold for the Kalla-Lai work marketplace.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.7.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  equatable: ^2.0.7
+  firebase_auth: ^7.0.1
+  firebase_core: ^5.1.0
+  flutter_bloc: ^8.1.6
+  geolocator: ^14.0.2
+  google_maps_flutter: ^2.10.0
+  google_sign_in: ^7.2.0
+  http: ^1.2.2
+  image_picker: ^1.1.2
+  file_picker: ^8.1.2
+  intl: ^0.20.3
+  video_player: ^2.10.0
+  url_launcher: ^6.3.2
+  web: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/kalla_lai_logo.png
+    - assets/videos/output.mp4
+    - assets/videos/loading.mp4
+    - assets/videos/loading.webm

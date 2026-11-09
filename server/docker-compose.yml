@@ -1,0 +1,88 @@
+# Kalla-Lai production stack, adapted from the Flutter Backend Blueprint (§11.1).
+# Start with:  docker compose up -d --build
+#
+# Differences from the generic blueprint, on purpose:
+#  - One API container is enough at launch; add api2 + Caddy round-robin when
+#    uptime matters (the image is stateless, sessions live in PostgreSQL).
+#  - No BullMQ/worker: this codebase has no queue yet. Notifications go out
+#    over WebSocket in-request. Add redis-queue (noeviction) + a worker when
+#    background jobs are introduced — never mix queue data into the cache.
+#  - PostgreSQL and Redis have NO published ports; only Caddy faces the world.
+
+x-api: &api
+  build: .
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    NODE_ENV: production
+    PORT: "8080"
+    DATABASE_URL: postgres://kalla:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/kalla
+    REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis-cache:6379
+    TRUST_PROXY: "true"
+  networks: [internal]
+  mem_limit: 512m
+  cpus: 0.75
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis-cache: { condition: service_healthy }
+  logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"] # the ONLY published ports
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    networks: [internal]
+    mem_limit: 128m
+    depends_on: [api]
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  api: *api
+
+  postgres:
+    # PostGIS flavor is a drop-in superset; migration 002 uses it when present.
+    image: postgis/postgis:17-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kalla
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: kalla
+    volumes: ["pg_data:/var/lib/postgresql/data"]
+    networks: [internal]
+    mem_limit: 3g
+    shm_size: 256m
+    command: ["postgres", "-c", "max_connections=50", "-c", "shared_buffers=768MB", "-c", "log_min_duration_statement=200"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kalla -d kalla"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  redis-cache:
+    # Cache may be evicted when full — that is fine. Never store jobs here.
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--requirepass", "${REDIS_PASSWORD}"]
+    networks: [internal]
+    mem_limit: 300m
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+networks:
+  internal: {}
+
+volumes:
+  pg_data: {}
+  caddy_data: {}

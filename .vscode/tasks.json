@@ -1,0 +1,22 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Flutter: Run Kalla-Lai Web",
+			"type": "shell",
+			"command": "C:\\Users\\Samrat\\AppData\\Local\\Temp\\kalla-lai-flutter-sdk\\flutter\\bin\\flutter.bat",
+			"args": [
+				"run",
+				"-d",
+				"web-server",
+				"--web-hostname",
+				"127.0.0.1",
+				"--web-port",
+				"7357"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

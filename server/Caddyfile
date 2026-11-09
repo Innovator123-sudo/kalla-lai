@@ -1,0 +1,35 @@
+# Kalla-Lai edge proxy (blueprint §11.3). Replace the hostname with your own
+# and point DNS at this server. With Cloudflare in front, use SSL mode
+# "Full (strict)".
+api.kallalai.example {
+	encode zstd gzip
+
+	# Demo document verification carries base64 media (up to ~16 MB); showcase
+	# uploads up to ~30 MB. Keep headroom above the API's own parser limits.
+	request_body {
+		max_size 32MB
+	}
+
+	# Operational endpoints are never public.
+	@private path /metrics /readyz /healthz
+	respond @private 404
+
+	reverse_proxy api:8080 {
+		health_uri /readyz
+		health_interval 10s
+		health_timeout 3s
+		fail_duration 30s
+
+		transport http {
+			dial_timeout 3s
+			response_header_timeout 30s
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+}

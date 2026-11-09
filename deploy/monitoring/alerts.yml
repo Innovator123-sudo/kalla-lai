@@ -1,0 +1,68 @@
+groups:
+  - name: kalla-lai-api
+    rules:
+      - alert: KallaLaiApiDown
+        expr: up{job="kalla-lai-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Kalla-Lai API is not scrapeable
+          description: Prometheus has failed to scrape the API for 2 minutes. Check pods, readiness, and network policy.
+
+      - alert: KallaLaiHighErrorRate
+        expr: |
+          sum(rate(kalla_lai_http_requests_total{job="kalla-lai-api",status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(kalla_lai_http_requests_total{job="kalla-lai-api"}[5m])), 0.001)
+          > 0.02
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: API 5xx ratio above 2%
+          description: More than 2% of API responses have been server errors for 10 minutes.
+
+      - alert: KallaLaiHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(kalla_lai_http_request_duration_seconds_bucket{job="kalla-lai-api"}[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: API p95 latency above 1s
+          description: The 95th percentile API latency has exceeded one second for 10 minutes.
+
+      - alert: KallaLaiCacheErrors
+        expr: sum(rate(kalla_lai_cache_events_total{job="kalla-lai-api",result="error"}[5m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis cache is returning errors
+          description: The API is serving from PostgreSQL, but cache errors have persisted for 15 minutes. Verify Redis health and connectivity.
+
+      - alert: KallaLaiEventLoopLag
+        expr: kalla_lai_nodejs_eventloop_lag_p99_seconds{job="kalla-lai-api"} > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: API event loop lag above 200ms
+          description: Sustained event-loop delay suggests CPU saturation or a blocking call.
+
+      - alert: KallaLaiHeapPressure
+        expr: |
+          kalla_lai_nodejs_heap_size_used_bytes{job="kalla-lai-api"}
+          /
+          clamp_min(kalla_lai_nodejs_heap_size_total_bytes{job="kalla-lai-api"}, 1)
+          > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: API heap usage above 90%
+          description: Heap usage has been above 90% of the allocated heap for 15 minutes. Check for leaks or raise limits.

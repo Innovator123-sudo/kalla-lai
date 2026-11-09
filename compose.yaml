@@ -1,0 +1,220 @@
+name: kalla-lai
+
+# Single-host stack: PostgreSQL/PostGIS (authoritative), Redis (cache only),
+# the API, and the Flutter web edge. TLS is terminated by a load balancer in
+# front of `web`; see deploy/README.md.
+#
+# Copy .env.example to .env and set every required secret before starting.
+
+x-api-environment: &api-environment
+  NODE_ENV: ${NODE_ENV:-development}
+  PORT: "8080"
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgres://${POSTGRES_USER:-kallalai}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-kallalai}
+  AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env}
+  JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+  REFRESH_TTL_DAYS: ${REFRESH_TTL_DAYS:-30}
+  PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:?set PAYMENT_WEBHOOK_SECRET in .env}
+  REDIS_URL: redis://cache:6379
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8088,http://127.0.0.1:8088}
+  TRUST_PROXY: "true"
+  DEMO_MODE: ${DEMO_MODE:-true}
+  METRICS_TOKEN: ${METRICS_TOKEN:-}
+  FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+  VERIFF_BASE_URL: ${VERIFF_BASE_URL:-}
+  VERIFF_API_KEY: ${VERIFF_API_KEY:-}
+  VERIFF_SHARED_SECRET: ${VERIFF_SHARED_SECRET:-}
+  # Optional Supabase backend. When SUPABASE_DB_URL is set the API writes to
+  # Supabase Postgres; the publishable key is served to clients via app/config.
+  # NOTE: the `data` network is internal. Using a hosted Supabase database from
+  # this container requires granting the api service external egress.
+  SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
+  SUPABASE_PROJECT_REF: ${SUPABASE_PROJECT_REF:-}
+  SUPABASE_URL: ${SUPABASE_URL:-}
+  SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+  SUPABASE_DB_URL: ${SUPABASE_DB_URL:-}
+  SUPABASE_DB_PASSWORD: ${SUPABASE_DB_PASSWORD:-}
+  SUPABASE_DB_HOST: ${SUPABASE_DB_HOST:-}
+  SUPABASE_DB_PORT: ${SUPABASE_DB_PORT:-6543}
+  SUPABASE_DB_USER: ${SUPABASE_DB_USER:-}
+  SUPABASE_DB_NAME: ${SUPABASE_DB_NAME:-postgres}
+
+services:
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kallalai}
+      POSTGRES_USER: ${POSTGRES_USER:-kallalai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    shm_size: 256mb
+    networks:
+      - data
+
+  cache:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-256mb}
+      - --maxmemory-policy
+      - allkeys-lru
+      # Redis is cache-only; losing it must never lose business data.
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - data
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    environment: *api-environment
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${API_PORT:-8090}:8080"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - edge
+      - data
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        KALLALAI_API_URL: ""
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+      - /var/cache/nginx:size=32m
+      - /var/run:size=8m
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8088}:8080"
+    networks:
+      - edge
+
+  # Demo-only fixture loader. Never run against real user data.
+  #   docker compose --profile tools run --rm seed
+  seed:
+    profiles: ["tools"]
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    environment:
+      <<: *api-environment
+      AUTO_MIGRATE: "false"
+    command: ["node", "dist/db/seed.js"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - data
+
+  # On-demand logical backup into the backup-data volume.
+  #   docker compose --profile tools run --rm backup
+  backup:
+    profiles: ["tools"]
+    image: postgres:16-alpine
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB:-kallalai}
+      PGUSER: ${POSTGRES_USER:-kallalai}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      BACKUP_DIR: /backups
+      RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./deploy/backups:/scripts:ro
+      - backup-data:/backups
+    entrypoint: ["/bin/sh", "/scripts/pg_backup.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - data
+
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - edge
+
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:11.3.1
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./deploy/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - edge
+
+networks:
+  edge:
+  # The data network has no route to the internet.
+  data:
+    internal: true
+
+volumes:
+  db-data:
+  backup-data:
+  prometheus-data:
+  grafana-data:

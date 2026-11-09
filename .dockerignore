@@ -1,0 +1,17 @@
+.git
+.github
+.idea
+.vscode
+.dart_tool
+build
+coverage
+server
+test
+windows
+*.iml
+*.log
+.env
+.env.*
+!.env.example
+deploy/backups/*.dump
+deploy/backups/*.gz
