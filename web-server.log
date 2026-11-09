@@ -1,0 +1,3 @@
+Kalla-Lai dev server
+  web  http://127.0.0.1:7358   (root: C:\Users\Samrat\Desktop\कल्ला-लाई\build\web)
+  api  http://127.0.0.1:7358/v1 -> 127.0.0.1:8090

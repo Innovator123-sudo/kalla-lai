@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="/kalla-lai/">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="kalla_lai">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <title>kalla_lai</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #ffffff;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    (function () {
+      if (['localhost', '127.0.0.1', '[::1]'].indexOf(location.hostname) !== -1) return;
+      var seen = new WeakSet();
+      function prepare(v) {
+        if (!v || seen.has(v)) return;
+        seen.add(v);
+        v.muted = true;
+        v.defaultMuted = true;
+        v.playsInline = true;
+        v.setAttribute('muted', '');
+        v.setAttribute('playsinline', '');
+        var play = function () {
+          if (!v.paused) return;
+          var p = v.play();
+          if (p && p.catch) p.catch(function () {});
+        };
+        play();
+        v.addEventListener('loadeddata', play, { once: true });
+        v.addEventListener('canplay', play, { once: true });
+      }
+      new MutationObserver(function (records) {
+        records.forEach(function (r) {
+          if (!r.addedNodes) return;
+          r.addedNodes.forEach(function (n) {
+            if (n.nodeType !== 1) return;
+            if (n.tagName === 'VIDEO') prepare(n);
+            if (n.querySelectorAll) n.querySelectorAll('video').forEach(prepare);
+          });
+        });
+      }).observe(document.documentElement, { childList: true, subtree: true });
+      ['pointerdown', 'keydown', 'touchstart'].forEach(function (evt) {
+        document.addEventListener(evt, function () {
+          document.querySelectorAll('video').forEach(function (v) { v.muted = false; });
+        }, { once: true, capture: true });
+      });
+    })();
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
