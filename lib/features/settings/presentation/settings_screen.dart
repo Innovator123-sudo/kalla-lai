@@ -1,10 +1,7 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:kalla_lai/core/config/app_config.dart';
 import 'package:kalla_lai/core/config/app_settings.dart';
 import 'package:kalla_lai/core/localization/locale_cubit.dart';
-import 'package:kalla_lai/core/networking/api_client.dart';
 import 'package:kalla_lai/core/storage/session_store.dart';
 import 'package:kalla_lai/features/auth/application/auth_cubit.dart';
 import 'package:kalla_lai/features/auth/application/auth_state.dart';
@@ -27,96 +24,14 @@ class SettingsLauncher extends StatelessWidget {
   );
 }
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  final _apiUrl = TextEditingController();
-  Map<String, dynamic> _config = const {};
-  String? _configError;
-  bool _loadingConfig = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _apiUrl.text = context.read<ApiClient>().baseUrl;
-    _loadConfig();
-  }
-
-  @override
-  void dispose() {
-    _apiUrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadConfig() async {
-    if (!mounted) return;
-    setState(() {
-      _loadingConfig = true;
-      _configError = null;
-    });
-    try {
-      final json = await context.read<ApiClient>().getJson('/v1/app/config');
-      if (!mounted) return;
-      setState(() {
-        _config = json;
-        _loadingConfig = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _configError = error.toString();
-        _loadingConfig = false;
-      });
-    }
-  }
-
-  void _applyApiUrl() {
-    final value = _apiUrl.text.trim();
-    context.read<ApiClient>().updateBaseUrl(value);
-    context.read<AppSettingsCubit>().setApiUrlOverride(value);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('API address updated.')));
-    _loadConfig();
-  }
-
-  void _resetApiUrl() {
-    final override = AppSettingsCubit.savedApiUrlOverride;
-    if (override == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Already using the default API address.')),
-      );
-      return;
-    }
-    // Restoring the build default needs a reload to recompute the local/hosted
-    // choice; clear the override and tell the user plainly.
-    context.read<AppSettingsCubit>().setApiUrlOverride('');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Override cleared. Reload the page to use the default.'),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettingsCubit>().state;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh server configuration',
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadConfig,
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
         children: [
@@ -184,9 +99,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: const Text('Notifications'),
                 subtitle: const Text('Stored on this device'),
                 value: settings.notificationsEnabled,
-                onChanged: (value) => context
-                    .read<AppSettingsCubit>()
-                    .setNotifications(value),
+                onChanged: (value) =>
+                    context.read<AppSettingsCubit>().setNotifications(value),
               ),
             ],
           ),
@@ -217,8 +131,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: const Text(
                             'Clears the saved session on this device',
                           ),
-                          onTap: () =>
-                              context.read<AuthCubit>().signOut(),
+                          onTap: () => context.read<AuthCubit>().signOut(),
                         ),
                     ],
                   );
@@ -227,111 +140,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           _Section(
-            title: 'Connection',
+            title: 'About कल्ला-लाई',
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: TextField(
-                  controller: _apiUrl,
-                  decoration: const InputDecoration(
-                    labelText: 'API server URL',
-                    helperText:
-                        'Leave empty to use this same website as the API.',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
+              const ListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('App Name'),
+                subtitle: Text('कल्ला-लाई  (Kalla-Lai)'),
+              ),
+              const ListTile(
+                leading: Icon(Icons.business_outlined),
+                title: Text('Developer'),
+                subtitle: Text('Innovator123'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.gavel_outlined),
+                title: const Text('Copyright'),
+                subtitle: Text(
+                  '© ${DateTime.now().year} Kalla-Lai. All rights reserved.',
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Row(
-                  children: [
-                    FilledButton(
-                      onPressed: _applyApiUrl,
-                      child: const Text('Apply'),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: _resetApiUrl,
-                      child: const Text('Reset'),
-                    ),
-                  ],
-                ),
+              const ListTile(
+                leading: Icon(Icons.verified_outlined),
+                title: Text('Version'),
+                subtitle: Text('1.0.0'),
               ),
-              _ConfigTile('Current API', _apiUrl.text.isEmpty ? '(same origin)' : _apiUrl.text),
-              _ConfigTile('This site', kIsWeb ? Uri.base.host : 'mobile/desktop'),
-              const _ConfigTile('Live API', AppConfig.liveApiEnabled ? 'Enabled' : 'Offline demo'),
-            ],
-          ),
-          _Section(
-            title: 'Sign-in configuration',
-            children: [
-              _ConfigTile('Firebase project', AppConfig.firebaseProjectId.isEmpty ? 'Not set' : AppConfig.firebaseProjectId),
-              const _ConfigTile('Auth domain', AppConfig.firebaseAuthDomain),
-              _ConfigTile(
-                'Google sign-in',
-                context.read<AuthCubit>().googleSignInConfigured
-                    ? 'Available in this build'
-                    : 'Not available',
+              const ListTile(
+                leading: Icon(Icons.description_outlined),
+                title: Text('License'),
+                subtitle: Text('All rights reserved. Unauthorised use prohibited.'),
               ),
               const Padding(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
                 child: Text(
-                  'Google sign-in requires this website\'s domain in Firebase '
-                  'Authentication > Settings > Authorized domains. '
-                  'Add the host shown above, then reload — no redeploy needed.',
+                  'कल्ला-लाई is a labour marketplace connecting workers and employers '
+                  'across Nepal. All trademarks and intellectual property remain '
+                  'the exclusive property of their respective owners.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ),
-            ],
-          ),
-          _Section(
-            title: 'Server configuration',
-            children: [
-              if (_loadingConfig)
-                const Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_configError != null)
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text('Could not read /v1/app/config: $_configError'),
-                )
-              else if (_config.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('No server settings returned.'),
-                )
-              else
-                ..._config.entries
-                    .where(
-                      (entry) =>
-                          entry.value == null ||
-                          entry.value is String ||
-                          entry.value is bool ||
-                          entry.value is num,
-                    )
-                    .map(
-                      (entry) => _ConfigTile(
-                        _labelFor(entry.key),
-                        '${entry.value ?? '—'}',
-                      ),
-                    ),
             ],
           ),
         ],
       ),
     );
   }
-}
-
-String _labelFor(String key) {
-  final spaced = key.replaceAllMapped(
-    RegExp(r'([a-z0-9])([A-Z])'),
-    (match) => '${match[1]} ${match[2]}',
-  );
-  if (spaced.isEmpty) return key;
-  return spaced[0].toUpperCase() + spaced.substring(1);
 }
 
 class _Section extends StatelessWidget {
@@ -363,25 +215,6 @@ class _Section extends StatelessWidget {
           ),
         ),
       ],
-    ),
-  );
-}
-
-class _ConfigTile extends StatelessWidget {
-  const _ConfigTile(this.label, this.value);
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => ListTile(
-    dense: true,
-    title: Text(label, style: Theme.of(context).textTheme.bodySmall),
-    subtitle: SelectableText(
-      value,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-        fontWeight: FontWeight.w600,
-      ),
     ),
   );
 }

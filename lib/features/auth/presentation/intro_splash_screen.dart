@@ -19,7 +19,6 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
     with SingleTickerProviderStateMixin {
   VideoPlayerController? _controller;
   bool _finished = false;
-  bool _soundBlocked = false;
   bool _videoFailed = false;
   bool _loadingVideo = false;
   Timer? _watchdog;
@@ -70,19 +69,16 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       controller
         ..setLooping(false)
         ..addListener(_handleVideoUpdate);
-      // Always start muted — every browser permits muted autoplay without
-      // any prior user interaction. A "Sound" button lets the user unmute
-      // after the first gesture. Trying unmuted first silently fails in
-      // Brave / Chrome without throwing, so we never catch the rejection.
+
+      // Start muted — every browser permits muted autoplay without
+      // user interaction. The video starts playing immediately and automatically.
       await controller.setVolume(0);
-      _soundBlocked = true;
       await controller.play();
       if (!mounted) return;
       _loadingVideo = false;
       setState(() {});
 
-      // Give the player 700 ms to actually start. If it still isn't playing
-      // by then (e.g. the asset failed to fetch) show the fallback logo.
+      // Give the player 700 ms to confirm it started.
       await Future<void>.delayed(const Duration(milliseconds: 700));
       if (!mounted) return;
       if (!controller.value.hasError && !controller.value.isPlaying) {
@@ -95,20 +91,6 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       _loadingVideo = false;
       _videoFailed = true;
       setState(() {});
-    }
-  }
-
-  Future<void> _enableSound() async {
-    final controller = _controller;
-    if (controller == null) return;
-    try {
-      await controller.setVolume(1.0);
-      if (!controller.value.hasError && !controller.value.isPlaying) {
-        await controller.play();
-      }
-      if (mounted) setState(() => _soundBlocked = false);
-    } catch (_) {
-      // Sound stays off; the intro continues either way.
     }
   }
 
@@ -207,25 +189,6 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
     );
   }
 
-  Widget _buildSoundButton() {
-    return Positioned(
-      left: 12,
-      bottom: 12,
-      child: OutlinedButton.icon(
-        onPressed: _enableSound,
-        icon: const Icon(Icons.volume_up_outlined, size: 20),
-        label: const Text('Sound'),
-        style: OutlinedButton.styleFrom(
-          backgroundColor: Colors.white.withValues(alpha: 0.85),
-          foregroundColor: Theme.of(context).colorScheme.primary,
-          side: const BorderSide(color: Color(0xFFCBD5E1)),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          minimumSize: const Size(0, 40),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
@@ -236,13 +199,7 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () {
-          if (_soundBlocked) {
-            _enableSound();
-            return;
-          }
-          _finish();
-        },
+        onTap: _finish,
         child: LayoutBuilder(
           builder: (context, outer) {
             // Fill the whole viewport. The clip is a portrait 9:16 video drawn
@@ -266,7 +223,6 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
                       _buildVideo(controller)
                     else
                       _buildFallbackLogo(logoWidth),
-                    if (_soundBlocked && hasVideo) _buildSoundButton(),
                   ],
                 ),
               ),
