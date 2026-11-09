@@ -38,10 +38,6 @@ class _AuthGateState extends State<AuthGate> {
         final journey = context.read<EntryJourneyCubit>();
         if (auth.status == AuthStatus.signedIn) {
           journey.syncSurvey();
-          // Every entry into the signed-in state replays the intro, so the
-          // intro video shows on the website and again right after signing in
-          // (sign-in, sign-up, or a restored session) before the home shell.
-          if (mounted) setState(() => _introFinished = false);
         } else {
           journey.resetForSignOut();
         }

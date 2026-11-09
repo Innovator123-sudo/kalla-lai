@@ -339,20 +339,25 @@ class _LoginCardState extends State<_LoginCard> {
                       Positioned.fill(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(16),
-                          child: LoadingAnimation(
-                            child: ColoredBox(
-                              color: Colors.white.withValues(alpha: 0.45),
-                              child: Center(
-                                child: Text(
-                                  _createMode
-                                      ? 'Creating your account…'
-                                      : 'Signing in…',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: KallaLaiColors.slate,
+                          child: Container(
+                            color: Colors.white.withValues(alpha: 0.88),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const CircularProgressIndicator(strokeWidth: 2.5),
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    _createMode
+                                        ? 'Creating your account…'
+                                        : 'Signing in…',
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: KallaLaiColors.slate,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
                             ),
                           ),

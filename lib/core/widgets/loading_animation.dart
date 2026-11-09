@@ -49,79 +49,26 @@ Future<VideoPlayerController> initializeIntroVideo() async {
   throw StateError('No playable intro video source ($lastError)');
 }
 
-/// Full-surface loading animation backed by the looping intro clip.
-/// Falls back to the standard Material progress indicator when no video
-/// source can be decoded, so a slow or unsupported codec never traps the UI.
-class LoadingAnimation extends StatefulWidget {
+/// Clean in-app loading animation with progress indicator.
+/// Does not load the intro video so background/in-app loading remains fast and lightweight.
+class LoadingAnimation extends StatelessWidget {
   const LoadingAnimation({super.key, this.child});
 
-  /// Optional foreground content rendered above the animation.
+  /// Optional foreground content rendered below or inside the indicator.
   final Widget? child;
 
   @override
-  State<LoadingAnimation> createState() => _LoadingAnimationState();
-}
-
-class _LoadingAnimationState extends State<LoadingAnimation> {
-  VideoPlayerController? _controller;
-  bool _failed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    initializeIntroVideo()
-        .then((controller) async {
-          if (!mounted) {
-            await controller.dispose();
-            return;
-          }
-          _controller = controller;
-          await controller.setVolume(0);
-          await controller.setLooping(true);
-          await controller.play();
-          if (mounted) setState(() {});
-        })
-        .catchError((Object _) {
-          if (!mounted) return;
-          setState(() => _failed = true);
-        });
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final controller = _controller;
-    if (_failed || controller == null || !controller.value.isInitialized) {
-      return SizedBox.expand(
-        child: widget.child ??
-            const Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-              ),
-            ),
-      );
-    }
-
-    return SizedBox.expand(
-      child: Stack(
-        fit: StackFit.expand,
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          ClipRect(
-            child: FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: controller.value.size.width,
-                height: controller.value.size.height,
-                child: VideoPlayer(controller),
-              ),
-            ),
-          ),
-          if (widget.child != null) Positioned.fill(child: widget.child!),
+          const CircularProgressIndicator(strokeWidth: 2.5),
+          if (child != null) ...[
+            const SizedBox(height: 12),
+            child!,
+          ],
         ],
       ),
     );
