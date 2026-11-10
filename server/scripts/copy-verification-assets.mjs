@@ -31,7 +31,10 @@ const copies = [
   ],
 
   // Human face detector / mesh / recognition / passive liveness models.
-  ['@vladmandic/human/dist/human.node-wasm.js', 'assets/human/human.node-wasm.js'],
+  // The .cjs extension is deliberate: this bundle is CommonJS and the server
+  // package is `"type": "module"`, so a .js copy would be treated as ESM and
+  // could not be loaded with require() in the serverless runtime.
+  ['@vladmandic/human/dist/human.node-wasm.js', 'assets/human/human.node-wasm.cjs'],
   ['@vladmandic/human/models/blazeface.json', 'assets/face-models/blazeface.json'],
   ['@vladmandic/human/models/blazeface.bin', 'assets/face-models/blazeface.bin'],
   ['@vladmandic/human/models/facemesh.json', 'assets/face-models/facemesh.json'],

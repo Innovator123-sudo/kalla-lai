@@ -47,7 +47,7 @@ let HumanConstructor: typeof HumanInstance | null = null;
  */
 function loadHumanConstructor(assetRoot: string): typeof HumanInstance {
   if (HumanConstructor) return HumanConstructor;
-  const bundle = path.join(assetRoot, 'human', 'human.node-wasm.js');
+  const bundle = path.join(assetRoot, 'human', 'human.node-wasm.cjs');
   if (!existsSync(bundle)) {
     throw errors.unavailable(
       'FACE_CHECK_UNAVAILABLE',
