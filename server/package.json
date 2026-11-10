@@ -11,6 +11,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json",
+    "postinstall": "node scripts/migrate-if-requested.mjs",
     "prebuild": "npm run verification:assets",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verification:assets": "node scripts/copy-verification-assets.mjs",
