@@ -4,7 +4,7 @@
 - **Frontend**: Flutter (Dart), Bloc pattern (AuthCubit, ProfileCubit, AdminCubit, HiringRequisitionCubit)
 - **Backend**: Express + TypeScript, PGlite fallback / Supabase Postgres
 - **DB**: Live Supabase (ref: rbviukwjttcommuodnlh, pooler: aws-0-ap-northeast-1)
-- **Admin login**: email=`novacane232` (or `novacane232@kallalai.app`), password=`gu kha66`
+- **Admin login**: email=`novacane232` (or `novacane232@kallalai.app`), password=`[redacted]`
 - **Server**: runs on port 8090 via `start-local.bat` (no `npm run dev` needed)
 - **Flutter SDK**: 3.47.9, not on PATH in shell — use full path or IDE
 
