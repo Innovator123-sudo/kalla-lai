@@ -101,12 +101,18 @@ export const config: Config = (() => {
     if (!parsed.data.FIREBASE_PROJECT_ID) {
       throw new Error('FIREBASE_PROJECT_ID must be set in production');
     }
-    if (
-      !parsed.data.VERIFF_BASE_URL ||
-      !parsed.data.VERIFF_API_KEY ||
-      !parsed.data.VERIFF_SHARED_SECRET
-    ) {
-      throw new Error('Veriff session and webhook credentials must be set in production');
+    // Veriff is optional. Hosts that only run the marketplace (or verify
+    // identities elsewhere) can leave it unset; partially configured
+    // credentials are almost always a mistake, so reject those.
+    const veriffValues = [
+      parsed.data.VERIFF_BASE_URL,
+      parsed.data.VERIFF_API_KEY,
+      parsed.data.VERIFF_SHARED_SECRET,
+    ];
+    if (veriffValues.some(Boolean) && !veriffValues.every(Boolean)) {
+      throw new Error(
+        'Set VERIFF_BASE_URL, VERIFF_API_KEY and VERIFF_SHARED_SECRET together, or leave all of them unset',
+      );
     }
   }
   return parsed.data;

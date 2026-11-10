@@ -1,0 +1,41 @@
+# The Vercel project builds only the API package (Root Directory = server).
+# Everything else in this repository belongs to the Flutter app or local
+# tooling and does not need to be uploaded.
+#
+# Paths that exist at the repository root are anchored with a leading slash so
+# they do not also exclude same-named directories inside server/src (for
+# example `/lib` must not exclude server/src/lib).
+/.git
+/.github
+/.vscode
+/.workbuddy
+/.workbuddy-ai
+/.debug-shots
+/.flutter_tool_state
+/.dart_tool
+/build
+/coverage
+/deploy
+/deploy-live
+/api-realtime
+/architecture
+/assets
+/data-memory
+/lib
+/security-privacy
+/supabase
+/uiux-quality
+/web
+/windows
+/workflows
+*.log
+*.mp4
+*.pdf
+*.png
+node_modules
+dist
+.data
+test
+scripts
+.env
+.env.*

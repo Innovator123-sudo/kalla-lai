@@ -48,10 +48,17 @@ export function createApp() {
     }),
   );
 
+  // `*` is used by single-origin/static deployments where the web app and API
+  // live on different hosts. Authentication is bearer-token based, so no
+  // cookies need to be shared across origins.
+  const allowAllOrigins = corsOrigins.includes('*');
+
   app.use(
     cors({
       origin: (origin, callback) => {
-        if (!origin || corsOrigins.includes(origin)) return callback(null, true);
+        if (allowAllOrigins || !origin || corsOrigins.includes(origin)) {
+          return callback(null, true);
+        }
         // Local Flutter web runs on an arbitrary dev port; allow loopback only
         // outside production. Deployed origins must be listed explicitly.
         if (

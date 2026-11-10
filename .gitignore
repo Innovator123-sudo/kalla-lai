@@ -65,3 +65,6 @@ deploy-live/
 Backup-codes-*.txt
 Qoder-win-x64-user.exe
 web-server*.log
+
+# Vercel CLI link metadata
+.vercel/

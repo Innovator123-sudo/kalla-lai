@@ -60,7 +60,10 @@ export async function initDb(): Promise<void> {
   if (config.PGLITE_PATH !== 'memory://') {
     mkdirSync(path.dirname(config.PGLITE_PATH), { recursive: true });
   }
-  const { PGlite } = await import('@electric-sql/pglite');
+  // Loaded through a variable so serverless bundlers do not include the
+  // WebAssembly engine in deployments that always use a hosted Postgres.
+  const pgliteModule = '@electric-sql/pglite';
+  const { PGlite } = (await import(pgliteModule)) as typeof import('@electric-sql/pglite');
   const client = new PGlite(config.PGLITE_PATH);
   await client.waitReady;
   pglite = client as unknown as NonNullable<typeof pglite>;

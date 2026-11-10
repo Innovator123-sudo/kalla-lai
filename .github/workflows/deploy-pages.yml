@@ -29,7 +29,7 @@ jobs:
           flutter build web --release \
             --base-href "/kalla-lai/" \
             --dart-define=KALLALAI_LIVE_API=true \
-            --dart-define=KALLALAI_API_URL=${{ vars.API_URL }} \
+            --dart-define=KALLALAI_API_URL=https://kalla-lai-api.vercel.app \
             --dart-define=KALLALAI_GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }}
       - uses: actions/upload-pages-artifact@v3
         with:

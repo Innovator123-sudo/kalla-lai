@@ -54,6 +54,10 @@ export const loadShedding: RequestHandler = (req, res, next) => {
   if (req.path === '/healthz' || req.path === '/readyz' || req.path === '/metrics') {
     return next();
   }
+  // Serverless cold starts (database connect, TLS handshakes) routinely exceed
+  // the delay threshold; shedding would reject the first request after every
+  // cold start without reducing any real queue.
+  if (process.env.VERCEL) return next();
   const maxDelayMs = eventLoop.max / 1e6;
   eventLoop.reset();
   if (maxDelayMs > 1000) {
