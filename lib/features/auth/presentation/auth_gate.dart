@@ -9,6 +9,8 @@ import 'package:kalla_lai/features/auth/presentation/intro_splash_screen.dart';
 import 'package:kalla_lai/features/auth/presentation/login_screen.dart';
 import 'package:kalla_lai/features/auth/presentation/survey_screen.dart';
 import 'package:kalla_lai/features/home/presentation/main_shell_screen.dart';
+import 'package:kalla_lai/features/mode/application/mode_switcher_cubit.dart';
+import 'package:kalla_lai/features/shared/domain/marketplace_models.dart';
 
 /// Runs the first-launch journey:
 /// intro video → worker/employer choice → optional survey → sign-in →
@@ -59,9 +61,11 @@ class _AuthGateState extends State<AuthGate> {
                 // Workers can choose "Skip for now" and browse the app, but
                 // the API still refuses applications until identity is
                 // VERIFIED. Employers can verify from their profile later.
+                final isHiring =
+                    context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
                 final workerNeedsIdentity =
                     !user.isDemoSession &&
-                    user.isWorker &&
+                    !isHiring &&
                     user.identityStatus != 'VERIFIED' &&
                     !journey.identitySkipped;
                 if (workerNeedsIdentity) {

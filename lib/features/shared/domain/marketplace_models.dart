@@ -62,6 +62,7 @@ class JobShift extends Equatable {
     this.incrementNote = '',
     this.compensationType = 'DAILY',
     this.negotiable = true,
+    this.googleMapsLink = '',
   });
 
   final String id;
@@ -84,6 +85,9 @@ class JobShift extends Equatable {
   final String compensationType;
   final bool negotiable;
 
+  /// Optional Google Maps share link / pin supplied by the hirer.
+  final String googleMapsLink;
+
   @override
   List<Object> get props => [
     id,
@@ -105,6 +109,7 @@ class JobShift extends Equatable {
     incrementNote,
     compensationType,
     negotiable,
+    googleMapsLink,
   ];
 }
 

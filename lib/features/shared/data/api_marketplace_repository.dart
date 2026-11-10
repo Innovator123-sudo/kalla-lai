@@ -76,6 +76,7 @@ class ApiMarketplaceRepository implements MarketplaceRepository {
       incrementNote: json['incrementNote']?.toString() ?? '',
       compensationType: json['compensationType']?.toString() ?? 'DAILY',
       negotiable: json['negotiable'] != false,
+      googleMapsLink: json['googleMapsLink']?.toString() ?? '',
     );
   }
 

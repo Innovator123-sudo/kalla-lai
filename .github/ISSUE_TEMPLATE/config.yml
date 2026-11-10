@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Employer pilot / partnership / investor enquiry
+    url: https://innovator123-sudo.github.io/kalla-lai/contact.html
+    about: For pilots, partnerships and investor conversations rather than code issues.
+  - name: 🔒 Report a security vulnerability privately
+    url: https://github.com/Innovator123-sudo/kalla-lai/security/advisories/new
+    about: Please do not open a public issue for security problems.
+  - name: 📚 Read the documentation
+    url: https://github.com/Innovator123-sudo/kalla-lai#readme
+    about: Developer docs, startup kit and setup instructions.

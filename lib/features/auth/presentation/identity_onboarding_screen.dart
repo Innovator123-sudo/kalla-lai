@@ -5,6 +5,8 @@ import 'package:kalla_lai/features/auth/application/auth_cubit.dart';
 import 'package:kalla_lai/features/auth/application/auth_state.dart';
 import 'package:kalla_lai/features/auth/application/entry_journey_cubit.dart';
 import 'package:kalla_lai/features/auth/presentation/document_verification_screen.dart';
+import 'package:kalla_lai/features/mode/application/mode_switcher_cubit.dart';
+import 'package:kalla_lai/features/shared/domain/marketplace_models.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class IdentityOnboardingScreen extends StatefulWidget {
@@ -74,16 +76,17 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
       return;
     }
 
+    final isHiring = context.read<ModeSwitcherCubit>().state == AppMode.hiring;
     final profile = <String, dynamic>{
       'fullName': _name.text.trim(),
       'phone': _phone.text.trim(),
-      if (user.isWorker)
+      if (!isHiring)
         'worker': {
           'baseArea': _area.text.trim(),
           'education': _education.text.trim(),
           'skillsSummary': _skills.text.trim(),
         },
-      if (user.isEmployer)
+      if (isHiring)
         'employer': {
           'organization': _organization.text.trim(),
           'worksiteArea': _area.text.trim(),
@@ -310,12 +313,13 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
   }
 
   Widget _heading(SessionUser user, bool onboardingComplete) {
+    final isHiring = context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
     final title =
         onboardingComplete
             ? _verificationHeading(user.identityStatus)
             : _profileStep == 0
             ? 'Let’s get to know you'
-            : user.isEmployer
+            : isHiring
             ? 'Tell us about your work'
             : 'Showcase your skills';
     final subtitle =
@@ -323,7 +327,7 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
             ? 'Verify it’s you to apply for jobs. You can skip this and verify later from your profile.'
             : _profileStep == 0
             ? 'A few quick details help make your account yours.'
-            : user.isEmployer
+            : isHiring
             ? 'Help workers understand your organization and the roles you hire for.'
             : 'Tell employers where you work and what you can do.';
 
@@ -340,7 +344,7 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
           child: Icon(
             onboardingComplete
                 ? Icons.shield_outlined
-                : user.isEmployer
+                : isHiring
                 ? Icons.business_center_outlined
                 : Icons.person_outline,
             color: KallaLaiColors.indigo,
@@ -415,6 +419,7 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
   }
 
   Widget _profileCard(SessionUser user) {
+    final isHiring = context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
@@ -502,7 +507,7 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
                   ]
                   : [
                     _sectionLabel(
-                      user.isEmployer
+                      isHiring
                           ? 'Hiring location'
                           : 'Where are you based?',
                       Icons.location_on_outlined,
@@ -510,11 +515,11 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
                     const SizedBox(height: 8),
                     _field(
                       _area,
-                      user.isEmployer ? 'Worksite area / city' : 'Area / city',
+                      isHiring ? 'Worksite area / city' : 'Area / city',
                       icon: Icons.map_outlined,
                     ),
                     const SizedBox(height: 20),
-                    if (user.isEmployer) ...[
+                    if (isHiring) ...[
                       _sectionLabel('Organization', Icons.apartment_outlined),
                       const SizedBox(height: 8),
                       _field(

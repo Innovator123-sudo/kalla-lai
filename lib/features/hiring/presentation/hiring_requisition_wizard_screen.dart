@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:kalla_lai/core/localization/app_strings.dart';
+import 'package:kalla_lai/core/maps/map_link.dart';
+import 'package:kalla_lai/core/maps/map_preview.dart';
 import 'package:kalla_lai/core/theme/kalla_lai_theme.dart';
 import 'package:kalla_lai/core/widgets/loading_animation.dart';
+import 'package:kalla_lai/features/discovery/application/vacancy_discovery_cubit.dart';
 import 'package:kalla_lai/features/hiring/application/hiring_requisition_cubit.dart';
 import 'package:kalla_lai/features/hiring/domain/job_catalog.dart';
 import 'package:kalla_lai/features/hiring/presentation/job_type_picker_screen.dart';
+import 'package:kalla_lai/features/mode/application/mode_switcher_cubit.dart';
+import 'package:kalla_lai/features/shared/domain/marketplace_models.dart';
 
 /// Question-style requisition wizard: one plain question per step, big tap
 /// targets, and an honest ending that states exactly where the data went.
@@ -16,7 +21,18 @@ class HiringRequisitionWizardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<HiringRequisitionCubit, HiringWizardState>(
+      listenWhen:
+          (previous, current) =>
+              previous.errorMessage != current.errorMessage ||
+              previous.serverDraft != current.serverDraft ||
+              previous.serverJobId != current.serverJobId,
       listener: (context, state) {
+        // A job only enters worker discovery after it is PUBLISHED. Refresh
+        // the shared discovery cubit immediately so switching to the worker
+        // side shows the new job without restarting the app.
+        if (state.submitted && state.serverJobId != null && !state.serverDraft) {
+          context.read<VacancyDiscoveryCubit>().load();
+        }
         if (state.errorMessage != null) {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
@@ -307,31 +323,46 @@ class _WizardStepContent extends StatelessWidget {
             const SizedBox(height: 12),
             TextFormField(
               initialValue: state.googleMapsLink,
-              decoration: const InputDecoration(
-                labelText: 'Google Maps Link or Pin (optional)',
-                hintText: 'e.g. https://maps.app.goo.gl/... or 27.7172, 85.3240',
-                prefixIcon: Icon(Icons.map_outlined),
-                helperText: 'Paste a Google Maps link to show exact directions to workers.',
+              keyboardType: TextInputType.url,
+              decoration: InputDecoration(
+                labelText: 'Google Maps link or pin (optional)',
+                hintText: 'https://maps.app.goo.gl/… or 27.7172, 85.3240',
+                prefixIcon: const Icon(Icons.map_outlined),
+                helperText:
+                    'Workers get a directions button for this exact location.',
+                errorText: state.hasInvalidMapsLink
+                    ? 'Use a Google Maps link or a coordinate pin.'
+                    : null,
               ),
               onChanged: cubit.setGoogleMapsLink,
             ),
-            if (state.googleMapsLink.isNotEmpty || state.hasTrueLocation)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: TextButton.icon(
+            if (state.googleMapsLink.trim().isNotEmpty || state.hasTrueLocation) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 200,
+                width: double.infinity,
+                child: buildMapPreview(
+                  link: state.googleMapsLink,
+                  latitude: state.latitude,
+                  longitude: state.longitude,
+                  area: state.area,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
                   onPressed: cubit.openDirections,
                   icon: const Icon(Icons.directions_outlined),
-                  label: const Text('Preview directions in Google Maps'),
+                  label: const Text('Open directions in Google Maps'),
                 ),
               ),
-            if (state.hasTrueLocation)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  'GPS Pin: ${state.latitude!.toStringAsFixed(5)}, ${state.longitude!.toStringAsFixed(5)}',
-                  style: const TextStyle(color: KallaLaiColors.muted, fontSize: 12),
-                ),
+              const SizedBox(height: 6),
+              Text(
+                'Saved with the job: ${MapLink.pinLabel(state.latitude, state.longitude).isEmpty ? state.area.trim() : MapLink.pinLabel(state.latitude, state.longitude)}',
+                style: const TextStyle(color: KallaLaiColors.muted, fontSize: 12),
               ),
+            ],
             const SizedBox(height: 14),
             TextFormField(
               initialValue: state.workingHours,
@@ -504,7 +535,7 @@ class _WizardStepContent extends StatelessWidget {
               _SummaryLine(label: 'Notes', value: state.details.trim()),
             const SizedBox(height: 12),
             const Text(
-              'With an employer account this is sent to the server and saved as a draft. Without one it stays a local preview. No worker is reserved and no funds move.',
+              'With an employer account the job is created and published immediately so workers can find it. Without one it stays a local preview. No worker is reserved and no funds move.',
               style: TextStyle(color: KallaLaiColors.muted),
             ),
           ],
@@ -618,53 +649,74 @@ class _SubmittedView extends StatelessWidget {
   Widget build(BuildContext context) {
     final cubit = context.read<HiringRequisitionCubit>();
     final wentToServer = state.serverJobId != null;
+    final published = wentToServer && !state.serverDraft;
+    final theme = Theme.of(context);
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              wentToServer ? Icons.cloud_done_outlined : Icons.preview_outlined,
+              published
+                  ? Icons.cloud_done_outlined
+                  : wentToServer
+                      ? Icons.pending_actions_outlined
+                      : Icons.preview_outlined,
               size: 52,
-              color:
-                  wentToServer ? KallaLaiColors.indigo : KallaLaiColors.muted,
+              color: published
+                  ? KallaLaiColors.indigo
+                  : wentToServer
+                      ? KallaLaiColors.warningText
+                      : KallaLaiColors.muted,
             ),
             const SizedBox(height: 16),
             Text(
-              wentToServer
+              published
                   ? 'Shift published live!'
-                  : 'Local preview ready',
-              style: Theme.of(context).textTheme.headlineSmall,
+                  : wentToServer
+                      ? 'Saved as a draft — not visible yet'
+                      : 'Local preview ready',
+              style: theme.textTheme.headlineSmall,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              wentToServer
-                  ? '${state.role} is now live! Workers nearby can find and apply for this shift immediately.'
-                  : '${state.role} · kept on this device only. Nothing was sent to the server.',
+              state.notice ??
+                  (published
+                      ? '${state.role} is now live! Workers nearby can find and apply for this shift immediately.'
+                      : '${state.role} · kept on this device only. Nothing was sent to the server.'),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 10,
               children: [
                 FilledButton.icon(
                   onPressed: () => cubit.startAnother(),
                   icon: const Icon(Icons.add),
                   label: const Text('Post another'),
                 ),
-                if (wentToServer) ...[
-                  const SizedBox(width: 12),
+                if (wentToServer && state.serverDraft)
+                  OutlinedButton.icon(
+                    onPressed: state.submitting ? null : cubit.retryPublish,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry publishing'),
+                  ),
+                if (published)
                   OutlinedButton.icon(
                     onPressed: () {
+                      // Switching the cubit directly bypasses the shell's
+                      // segmented-button handler, so refresh discovery here.
+                      context.read<VacancyDiscoveryCubit>().load();
                       context.read<ModeSwitcherCubit>().select(AppMode.vacancy);
                       cubit.startAnother();
                     },
                     icon: const Icon(Icons.map_outlined),
                     label: const Text('View on map'),
                   ),
-                ],
               ],
             ),
           ],

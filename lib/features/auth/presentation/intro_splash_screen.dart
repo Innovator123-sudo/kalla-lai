@@ -80,7 +80,7 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
         _loadingVideo = false;
         setState(() {});
 
-        await Future<void>.delayed(const Duration(milliseconds: 350));
+        await Future<void>.delayed(const Duration(milliseconds: 300));
         if (!mounted) return;
         if (!controller.value.isPlaying) {
           await controller.setVolume(0);
@@ -249,6 +249,27 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
                       _buildVideo(controller)
                     else
                       _buildFallbackLogo(logoWidth),
+                    Positioned(
+                      bottom: 20,
+                      left: 16,
+                      right: 16,
+                      child: SafeArea(
+                        child: Center(
+                          child: TextButton(
+                            onPressed: _finish,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white.withValues(alpha: 0.9),
+                              backgroundColor: Colors.black.withValues(alpha: 0.35),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                            ),
+                            child: const Text('Skip intro'),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

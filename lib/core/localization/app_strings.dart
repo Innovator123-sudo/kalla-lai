@@ -86,7 +86,7 @@ class AppStrings {
       'create_account': 'नयाँ खाता',
       'account_type': 'खाताको प्रकार',
       'role_worker': 'म काम गर्न चाहन्छु',
-      'role_employer': 'मलाई काम चाहिन्छ',
+      'role_employer': 'म काम गराउन चाहन्छु',
       'password': 'पासवर्ड',
       'signin_btn': 'साइन इन',
       'create_btn': 'खाता बनाउनुहोस्',

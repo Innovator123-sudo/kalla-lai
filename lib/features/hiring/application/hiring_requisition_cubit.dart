@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kalla_lai/core/location/device_location.dart';
+import 'package:kalla_lai/core/maps/map_link.dart';
 import 'package:kalla_lai/core/networking/api_client.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -76,10 +77,11 @@ class HiringWizardState extends Equatable {
     final trimmedCompany = companyInfo.trim();
     if (trimmedCompany.isNotEmpty) parts.add('About us: $trimmedCompany');
     final trimmedMaps = googleMapsLink.trim();
-    if (trimmedMaps.isNotEmpty) parts.add('Google Maps: $trimmedMaps');
+    if (trimmedMaps.isNotEmpty) parts.add('Location link: $trimmedMaps');
     if (parts.isNotEmpty) return parts.join('\n\n');
-    return '$role needed in $area. Shift window: $shiftLabel.' +
-        (trimmedMaps.isNotEmpty ? '\nGoogle Maps: $trimmedMaps' : '');
+    final base = '$role needed in $area. Shift window: $shiftLabel.';
+    if (trimmedMaps.isNotEmpty) return '$base\n\nLocation link: $trimmedMaps';
+    return base;
   }
 
   HiringWizardState copyWith({
@@ -184,6 +186,8 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
 
   void setRole(String role) =>
       emit(state.copyWith(role: role, clearError: true));
+  void setJobType(String role, String category) =>
+      emit(state.copyWith(role: role, category: category, clearError: true));
   void setCategory(String category) =>
       emit(state.copyWith(category: category, clearError: true));
   void setArea(String area) =>
@@ -194,8 +198,10 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
       emit(state.copyWith(companyInfo: companyInfo, clearError: true));
   void setShiftLabel(String shiftLabel) =>
       emit(state.copyWith(shiftLabel: shiftLabel, clearError: true));
+  void setShift(String shiftLabel) => setShiftLabel(shiftLabel);
   void setRateNpr(int rateNpr) =>
       emit(state.copyWith(rateNpr: rateNpr, clearError: true));
+  void setRate(int rateNpr) => setRateNpr(rateNpr);
   void setContactPhone(String phone) =>
       emit(state.copyWith(contactPhone: phone, clearError: true));
   void setWorkingHours(String hours) =>
@@ -213,48 +219,49 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
   void setNegotiable(bool negotiable) =>
       emit(state.copyWith(negotiable: negotiable, clearError: true));
 
+  // Named aliases used by the wizard. They emit the same state as the
+  // canonical setters but keep widget code readable and atomic where two
+  // fields change together.
+  void setJobType(String title, String category) => emit(
+    state.copyWith(role: title, category: category, clearError: true),
+  );
+  void setShift(String shift) =>
+      emit(state.copyWith(shiftLabel: shift, clearError: true));
+  void setRate(int rate) =>
+      emit(state.copyWith(rateNpr: rate, clearError: true));
+
   void setGoogleMapsLink(String link) {
     final trimmed = link.trim();
-    double? lat = state.latitude;
-    double? lng = state.longitude;
-
-    // Check for coordinates in string: e.g. "27.7172, 85.3240"
-    final coordMatch = RegExp(r'(-?\d{1,3}\.\d+)[,\s]+(-?\d{1,3}\.\d+)').firstMatch(trimmed);
-    if (coordMatch != null) {
-      lat = double.tryParse(coordMatch.group(1)!);
-      lng = double.tryParse(coordMatch.group(2)!);
-    } else {
-      // Check for URL with @lat,lng or q=lat,lng
-      final urlMatch = RegExp(r'[@?&](?:q|ll)?=?(-?\d{1,3}\.\d+)[,](-?\d{1,3}\.\d+)').firstMatch(trimmed);
-      if (urlMatch != null) {
-        lat = double.tryParse(urlMatch.group(1)!);
-        lng = double.tryParse(urlMatch.group(2)!);
-      }
-    }
-
+    final parsed = MapLink.coordinates(trimmed);
     emit(
       state.copyWith(
         googleMapsLink: trimmed,
-        latitude: lat,
-        longitude: lng,
+        latitude: parsed?.latitude ?? state.latitude,
+        longitude: parsed?.longitude ?? state.longitude,
         clearError: true,
       ),
     );
   }
 
-  Future<void> openDirections() async {
+  /// True when a non-empty link is not a Google Maps URL or a coordinate pin.
+  /// The wizard uses this for inline validation instead of failing at submit.
+  bool get hasInvalidMapsLink {
     final link = state.googleMapsLink.trim();
-    String targetUrl;
-    if (link.startsWith('http://') || link.startsWith('https://')) {
-      targetUrl = link;
-    } else if (state.latitude != null && state.longitude != null) {
-      targetUrl = 'https://www.google.com/maps/dir/?api=1&destination=${state.latitude},${state.longitude}';
-    } else if (state.area.trim().isNotEmpty) {
-      targetUrl = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(state.area.trim())}';
-    } else {
+    return link.isNotEmpty && !MapLink.isValid(link);
+  }
+
+  Future<void> openDirections() async {
+    final uri = MapLink.directionsUri(
+      link: state.googleMapsLink,
+      latitude: state.latitude,
+      longitude: state.longitude,
+      area: state.area,
+    );
+    if (!await canLaunchUrl(uri)) {
+      emit(state.copyWith(errorMessage: 'Google Maps could not be opened.'));
       return;
     }
-    await launchUrl(Uri.parse(targetUrl), mode: LaunchMode.externalApplication);
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> useMyLocation() async {
@@ -336,6 +343,15 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
   }
 
   Future<void> submit() async {
+    if (hasInvalidMapsLink) {
+      emit(
+        state.copyWith(
+          errorMessage:
+              'Use a Google Maps link (https://maps.app.goo.gl/…) or a pin like 27.7172, 85.3240 — or leave the field empty.',
+        ),
+      );
+      return;
+    }
     if (_client.accessToken == null) {
       submitLocalPreview();
       return;
@@ -372,14 +388,12 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
       final job = json['job'];
       final id = job is Map<String, dynamic> ? job['id']?.toString() : null;
 
-      // Automatically publish the job immediately so workers can discover it!
-      bool published = false;
-      if (id != null) {
-        try {
-          await _client.postJson('/v1/jobs/$id/publish');
-          published = true;
-        } catch (_) {}
-      }
+      // Jobs are created as DRAFT on the server and only PUBLISHED jobs show
+      // up in worker discovery. Publish immediately, but NEVER hide a failure:
+      // a swallowed error is exactly why jobs used to "disappear".
+      final failure = id == null
+          ? 'The server did not return a job id.'
+          : await _publish(id);
 
       if (isClosed) return;
       emit(
@@ -387,10 +401,11 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
           submitting: false,
           submitted: true,
           serverJobId: id,
-          serverDraft: !published,
-          notice: published
+          serverDraft: failure != null,
+          notice: failure == null
               ? 'Shift published successfully! It is now live on the worker vacancy map.'
-              : 'Saved as draft on the server.',
+              : 'Saved on the server as a DRAFT — workers cannot see it yet. Publishing failed: $failure',
+          errorMessage: failure,
         ),
       );
     } on ApiException catch (error) {
@@ -411,6 +426,37 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
         ),
       );
     }
+  }
+
+  /// Returns null on success, or a human-readable reason on failure.
+  Future<String?> _publish(String id) async {
+    try {
+      await _client.postJson('/v1/jobs/$id/publish');
+      return null;
+    } on ApiException catch (error) {
+      return error.message;
+    } catch (_) {
+      return 'Could not reach the server.';
+    }
+  }
+
+  /// Lets the hirer recover from a failed publish without re-posting the job.
+  Future<void> retryPublish() async {
+    final id = state.serverJobId;
+    if (id == null || state.submitting) return;
+    emit(state.copyWith(submitting: true, clearError: true));
+    final failure = await _publish(id);
+    if (isClosed) return;
+    emit(
+      state.copyWith(
+        submitting: false,
+        serverDraft: failure != null,
+        notice: failure == null
+            ? 'Shift published successfully! It is now live on the worker vacancy map.'
+            : 'Still a draft: $failure',
+        errorMessage: failure,
+      ),
+    );
   }
 
   void startAnother() => emit(const HiringWizardState());

@@ -291,6 +291,25 @@ router.post(
       fullName = row.full_name;
       identityStatus = row.identity_status;
       onboardingComplete = row.onboarding_complete;
+
+      // Ensure the role selected during Google sign-in is granted to the user
+      await db().query(
+        'INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [userId, body.role],
+      );
+      if (body.role === 'WORKER') {
+        await db().query(
+          `INSERT INTO worker_profiles (user_id, public_name, verification_status)
+           VALUES ($1, $2, 'PENDING') ON CONFLICT DO NOTHING`,
+          [userId, fullName],
+        );
+      } else {
+        await db().query(
+          `INSERT INTO employer_profiles (user_id, display_name)
+           VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [userId, fullName],
+        );
+      }
     } else {
       const emailOwner = await db().query<{ id: string }>(
         'SELECT id FROM users WHERE lower(email) = $1',

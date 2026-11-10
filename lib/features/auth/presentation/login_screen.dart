@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:kalla_lai/core/config/app_config.dart';
-import 'package:kalla_lai/core/storage/session_store.dart';
 import 'package:kalla_lai/core/localization/app_strings.dart';
+import 'package:kalla_lai/core/storage/session_store.dart';
 import 'package:kalla_lai/core/theme/kalla_lai_theme.dart';
-import 'package:kalla_lai/core/widgets/demo_banner.dart';
-import 'package:kalla_lai/core/widgets/loading_animation.dart';
 import 'package:kalla_lai/features/auth/application/auth_cubit.dart';
 import 'package:kalla_lai/features/auth/application/auth_state.dart';
-import 'package:kalla_lai/features/auth/application/entry_journey_cubit.dart';
+import 'package:kalla_lai/features/mode/application/mode_switcher_cubit.dart';
 import 'package:kalla_lai/features/settings/presentation/settings_screen.dart';
+import 'package:kalla_lai/features/shared/domain/marketplace_models.dart';
 
 /// Sign-in / create-account menu.
 ///
@@ -65,8 +63,7 @@ class _LoginCardState extends State<_LoginCard> {
   @override
   void initState() {
     super.initState();
-    _asEmployer =
-        context.read<EntryJourneyCubit>().state.intent == EntryIntent.employer;
+    _asEmployer = false;
   }
 
   @override
@@ -82,6 +79,9 @@ class _LoginCardState extends State<_LoginCard> {
     FocusScope.of(context).unfocus();
     final cubit = context.read<AuthCubit>();
     SessionStore.saveEmail(_email.text);
+    context
+        .read<ModeSwitcherCubit>()
+        .select(_asEmployer ? AppMode.hiring : AppMode.vacancy);
     if (_createMode) {
       cubit.signUp(
         email: _email.text,
@@ -98,7 +98,6 @@ class _LoginCardState extends State<_LoginCard> {
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
-    final journey = context.watch<EntryJourneyCubit>().state;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -117,7 +116,12 @@ class _LoginCardState extends State<_LoginCard> {
             padding: const EdgeInsets.all(20),
             child: BlocBuilder<AuthCubit, AuthState>(
               builder: (context, auth) {
-                final googleSignInConfigured = true;
+                // Honour the gateway's real capability instead of assuming
+                // Firebase is configured. In offline/demo mode the Google
+                // button is hidden rather than throwing at runtime.
+                final googleSignInConfigured = context
+                    .read<AuthCubit>()
+                    .googleSignInConfigured;
                 return Stack(
                   children: [
                     Column(
@@ -142,6 +146,26 @@ class _LoginCardState extends State<_LoginCard> {
                                   setState(() => _createMode = selection.first),
                         ),
                         const SizedBox(height: 18),
+                        SegmentedButton<bool>(
+                          showSelectedIcon: false,
+                          segments: [
+                            ButtonSegment(
+                              value: false,
+                              icon: const Icon(Icons.engineering_outlined),
+                              label: Text(strings.text('role_worker')),
+                            ),
+                            ButtonSegment(
+                              value: true,
+                              icon: const Icon(Icons.business_center_outlined),
+                              label: Text(strings.text('role_employer')),
+                            ),
+                          ],
+                          selected: {_asEmployer},
+                          onSelectionChanged:
+                              (selection) =>
+                                  setState(() => _asEmployer = selection.first),
+                        ),
+                        const SizedBox(height: 16),
                         if (_createMode) ...[
                           TextFormField(
                             controller: _fullName,
@@ -150,33 +174,6 @@ class _LoginCardState extends State<_LoginCard> {
                               labelText: 'Full name',
                               prefixIcon: Icon(Icons.person_outline),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            strings.text('account_type'),
-                            style: const TextStyle(color: KallaLaiColors.muted),
-                          ),
-                          const SizedBox(height: 6),
-                          SegmentedButton<bool>(
-                            segments: [
-                              ButtonSegment(
-                                value: false,
-                                icon: const Icon(Icons.engineering_outlined),
-                                label: Text(strings.text('role_worker')),
-                              ),
-                              ButtonSegment(
-                                value: true,
-                                icon: const Icon(
-                                  Icons.business_center_outlined,
-                                ),
-                                label: Text(strings.text('role_employer')),
-                              ),
-                            ],
-                            selected: {_asEmployer},
-                            onSelectionChanged:
-                                (selection) => setState(
-                                  () => _asEmployer = selection.first,
-                                ),
                           ),
                           if (_asEmployer) ...[
                             const SizedBox(height: 12),
@@ -282,49 +279,43 @@ class _LoginCardState extends State<_LoginCard> {
                           ),
                         ),
                         const SizedBox(height: 14),
-                        if (!_createMode && googleSignInConfigured) ...[
-                          Text(
-                            strings.text('google_account_type'),
-                            style: Theme.of(context).textTheme.labelLarge,
-                          ),
-                          const SizedBox(height: 8),
-                          SegmentedButton<bool>(
-                            showSelectedIcon: false,
-                            segments: [
-                              ButtonSegment(
-                                value: false,
-                                icon: const Icon(Icons.engineering_outlined),
-                                label: Text(strings.text('role_worker')),
-                              ),
-                              ButtonSegment(
-                                value: true,
-                                icon: const Icon(
-                                  Icons.business_center_outlined,
+                        if (googleSignInConfigured) ...[
+                          Row(
+                            children: const [
+                              Expanded(child: Divider()),
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 12),
+                                child: Text(
+                                  'or',
+                                  style: TextStyle(color: KallaLaiColors.muted),
                                 ),
-                                label: Text(strings.text('role_employer')),
                               ),
+                              Expanded(child: Divider()),
                             ],
-                            selected: {_asEmployer},
-                            onSelectionChanged:
-                                (selection) => setState(
-                                  () => _asEmployer = selection.first,
-                                ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 14),
+                          OutlinedButton.icon(
+                            onPressed:
+                                !auth.busy
+                                    ? () {
+                                        final target = _asEmployer
+                                            ? AppMode.hiring
+                                            : AppMode.vacancy;
+                                        context
+                                            .read<ModeSwitcherCubit>()
+                                            .select(target);
+                                        context
+                                            .read<AuthCubit>()
+                                            .signInWithGoogle(asEmployer: _asEmployer);
+                                      }
+                                    : null,
+                            icon: const Icon(Icons.account_circle_outlined),
+                            label: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              child: Text(strings.text('google_sign_in')),
+                            ),
+                          ),
                         ],
-                        OutlinedButton.icon(
-                          onPressed:
-                              !auth.busy && googleSignInConfigured
-                                  ? () => context
-                                      .read<AuthCubit>()
-                                      .signInWithGoogle(asEmployer: _asEmployer)
-                                  : null,
-                          icon: const Icon(Icons.account_circle_outlined),
-                          label: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            child: Text(strings.text('google_sign_in')),
-                          ),
-                        ),
                       ],
                     ),
                     if (auth.busy)
@@ -332,7 +323,9 @@ class _LoginCardState extends State<_LoginCard> {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(16),
                           child: Container(
-                            color: Colors.white.withValues(alpha: 0.88),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surface.withValues(alpha: 0.9),
                             child: Center(
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -366,47 +359,3 @@ class _LoginCardState extends State<_LoginCard> {
   }
 }
 
-/// Shows the choice made before the survey and offers a one-tap way back.
-class _PathBanner extends StatelessWidget {
-  const _PathBanner({required this.intent, required this.onChange});
-
-  final EntryIntent intent;
-  final VoidCallback onChange;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-      decoration: BoxDecoration(
-        color: KallaLaiColors.indigo.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: KallaLaiColors.indigo.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            intent == EntryIntent.employer
-                ? Icons.business_center_outlined
-                : Icons.engineering_outlined,
-            size: 20,
-            color: KallaLaiColors.indigo,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              intent == EntryIntent.employer
-                  ? 'Hiring path · post work'
-                  : 'Worker path · verify before applying',
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                color: KallaLaiColors.indigo,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          TextButton(onPressed: onChange, child: const Text('Change')),
-        ],
-      ),
-    );
-  }
-}

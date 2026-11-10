@@ -7,6 +7,7 @@ import 'package:kalla_lai/features/admin/presentation/admin_people_screen.dart';
 import 'package:kalla_lai/features/auth/application/auth_cubit.dart';
 import 'package:kalla_lai/features/auth/application/auth_state.dart';
 import 'package:kalla_lai/features/auth/presentation/identity_onboarding_screen.dart';
+import 'package:kalla_lai/features/discovery/application/vacancy_discovery_cubit.dart';
 import 'package:kalla_lai/features/discovery/presentation/vacancy_map_discovery_screen.dart';
 import 'package:kalla_lai/features/hiring/presentation/hiring_requisition_wizard_screen.dart';
 import 'package:kalla_lai/features/mode/application/mode_switcher_cubit.dart';
@@ -31,12 +32,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
   @override
   void initState() {
     super.initState();
-    final user = context.read<AuthCubit>().state.user;
-    if (user?.isEmployer == true) {
-      context.read<ModeSwitcherCubit>().select(AppMode.hiring);
-    } else if (user?.isWorker == true) {
-      context.read<ModeSwitcherCubit>().select(AppMode.vacancy);
-    }
+    // Do not force ModeSwitcherCubit to a specific mode. Respect the user's active choice.
   }
 
   @override
@@ -50,12 +46,10 @@ class _MainShellScreenState extends State<MainShellScreen> {
         (user.isDemoSession || user.identityStatus == 'VERIFIED');
     return BlocBuilder<ModeSwitcherCubit, AppMode>(
       builder: (context, selectedMode) {
-        // The account role decides the marketplace side after sign-in:
-        // workers get vacancy search, employers get hiring. Staff (admins,
-        // moderators, billing admins) get a dedicated admin-focused layout
-        // with the admin console as the primary tab and their own profile
-        // as the secondary tab. Only non-staff users without a worker or
-        // employer role see the manual mode switcher.
+        // The mode switcher is a view choice, not an authorization boundary:
+        // both workers and hirers can switch sides at any time. The API still
+        // enforces EMPLOYER / WORKER on every protected endpoint. Staff-only
+        // accounts (no worker or employer role) get the admin layout.
         final isStaffOnly =
             user?.isStaff == true &&
             !user!.isWorker &&
@@ -268,15 +262,15 @@ class _MainShellScreenState extends State<MainShellScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: IconButton(
-                  tooltip: 'About this demo',
+                  tooltip: 'About कल्ला-लाई',
                   onPressed:
                       () => showAboutDialog(
                         context: context,
                         applicationName: 'कल्ला-लाई · Kalla-Lai',
-                        applicationVersion: '0.1.0 demo',
+                        applicationVersion: '0.1.0',
                         children: const [
                           Text(
-                            'Sample data only. Identity checks, job publication, location, notifications, and payment are not connected to a service.',
+                            'Jobs are published to the live API and appear in vacancy search after a refresh. Identity verification is processed in-app. Payments and escrow settlement are still modelled only, not real money transfers.',
                           ),
                         ],
                       ),

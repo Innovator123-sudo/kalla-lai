@@ -5,6 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart' as maps;
 import 'package:intl/intl.dart';
 import 'package:kalla_lai/core/config/app_config.dart';
 import 'package:kalla_lai/core/localization/app_strings.dart';
+import 'package:kalla_lai/core/maps/map_link.dart';
 import 'package:kalla_lai/core/theme/kalla_lai_theme.dart';
 import 'package:kalla_lai/core/widgets/loading_animation.dart';
 import 'package:kalla_lai/core/widgets/status_pill.dart';
@@ -77,39 +78,55 @@ class VacancyMapDiscoveryScreen extends StatelessWidget {
                           : 'Koteshwor, Kathmandu · Sample data',
                     ),
                     const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: OutlinedButton.icon(
-                        onPressed:
-                            state.locating
-                                ? null
-                                : () =>
-                                    context
-                                        .read<VacancyDiscoveryCubit>()
-                                        .useTrueLocation(),
-                        icon:
-                            state.locating
-                                ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                                : Icon(
-                                  state.userLocation != null
-                                      ? Icons.my_location
-                                      : Icons.location_searching,
-                                  size: 18,
-                                ),
-                        label: Text(
-                          state.locating
-                              ? 'Locating…'
-                              : state.userLocation != null
-                              ? 'True location on · tap to refresh'
-                              : 'Use my true location',
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              onPressed:
+                                  state.locating
+                                      ? null
+                                      : () => context
+                                          .read<VacancyDiscoveryCubit>()
+                                          .useTrueLocation(),
+                              icon:
+                                  state.locating
+                                      ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                      : Icon(
+                                        state.userLocation != null
+                                            ? Icons.my_location
+                                            : Icons.location_searching,
+                                        size: 18,
+                                      ),
+                              label: Text(
+                                state.locating
+                                    ? 'Locating…'
+                                    : state.userLocation != null
+                                    ? 'True location on'
+                                    : 'Use my true location',
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        IconButton.outlined(
+                          tooltip: 'Refresh jobs',
+                          onPressed:
+                              state.isLoading
+                                  ? null
+                                  : () => context
+                                      .read<VacancyDiscoveryCubit>()
+                                      .load(),
+                          icon: const Icon(Icons.refresh, size: 20),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -426,9 +443,14 @@ class _MapAndJobSheet extends StatelessWidget {
                                   ?.copyWith(fontWeight: FontWeight.w800),
                             ),
                           ),
-                          const Icon(Icons.tune, size: 20),
-                          const SizedBox(width: 4),
-                          const Text('Relevant'),
+                          TextButton.icon(
+                            onPressed:
+                                () => context
+                                    .read<VacancyDiscoveryCubit>()
+                                    .load(),
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Refresh'),
+                          ),
                         ],
                       ),
                     ),
@@ -625,13 +647,17 @@ class _JobDetailsSheetState extends State<_JobDetailsSheet> {
             OutlinedButton.icon(
               onPressed: () {
                 String targetUrl;
-                final urlMatch = RegExp(r'https?://[^\s]+(?:google\.com/maps|maps\.app\.goo\.gl)[^\s]*').firstMatch(job.description);
-                if (urlMatch != null) {
-                  targetUrl = urlMatch.group(0)!;
-                } else if (job.location.latitude != 0 && job.location.longitude != 0) {
-                  targetUrl = 'https://www.google.com/maps/dir/?api=1&destination=${job.location.latitude},${job.location.longitude}';
+                if (job.googleMapsLink.trim().isNotEmpty) {
+                  targetUrl = job.googleMapsLink.trim();
                 } else {
-                  targetUrl = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(job.area)}';
+                  final urlMatch = RegExp(r'https?://[^\s]+(?:google\.com/maps|maps\.app\.goo\.gl)[^\s]*').firstMatch(job.description);
+                  if (urlMatch != null) {
+                    targetUrl = urlMatch.group(0)!;
+                  } else if (job.location.latitude != 0 && job.location.longitude != 0) {
+                    targetUrl = 'https://www.google.com/maps/dir/?api=1&destination=${job.location.latitude},${job.location.longitude}';
+                  } else {
+                    targetUrl = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(job.area)}';
+                  }
                 }
                 launchUrl(Uri.parse(targetUrl), mode: LaunchMode.externalApplication);
               },
