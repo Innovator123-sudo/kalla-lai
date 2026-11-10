@@ -36,6 +36,6 @@ node_modules
 dist
 .data
 test
-scripts
+/scripts
 .env
 .env.*
