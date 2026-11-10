@@ -70,6 +70,13 @@ class HiringWizardState extends Equatable {
 
   bool get hasTrueLocation => latitude != null && longitude != null;
 
+  /// True when a non-empty link is not a Google Maps URL or a coordinate pin.
+  /// The wizard uses this for inline validation instead of failing at submit.
+  bool get hasInvalidMapsLink {
+    final link = googleMapsLink.trim();
+    return link.isNotEmpty && !MapLink.isValid(link);
+  }
+
   String get composedDescription {
     final parts = <String>[];
     final trimmedDetails = details.trim();
@@ -186,8 +193,6 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
 
   void setRole(String role) =>
       emit(state.copyWith(role: role, clearError: true));
-  void setJobType(String role, String category) =>
-      emit(state.copyWith(role: role, category: category, clearError: true));
   void setCategory(String category) =>
       emit(state.copyWith(category: category, clearError: true));
   void setArea(String area) =>
@@ -198,10 +203,8 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
       emit(state.copyWith(companyInfo: companyInfo, clearError: true));
   void setShiftLabel(String shiftLabel) =>
       emit(state.copyWith(shiftLabel: shiftLabel, clearError: true));
-  void setShift(String shiftLabel) => setShiftLabel(shiftLabel);
   void setRateNpr(int rateNpr) =>
       emit(state.copyWith(rateNpr: rateNpr, clearError: true));
-  void setRate(int rateNpr) => setRateNpr(rateNpr);
   void setContactPhone(String phone) =>
       emit(state.copyWith(contactPhone: phone, clearError: true));
   void setWorkingHours(String hours) =>
@@ -245,10 +248,7 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
 
   /// True when a non-empty link is not a Google Maps URL or a coordinate pin.
   /// The wizard uses this for inline validation instead of failing at submit.
-  bool get hasInvalidMapsLink {
-    final link = state.googleMapsLink.trim();
-    return link.isNotEmpty && !MapLink.isValid(link);
-  }
+  bool get hasInvalidMapsLink => state.hasInvalidMapsLink;
 
   Future<void> openDirections() async {
     final uri = MapLink.directionsUri(
