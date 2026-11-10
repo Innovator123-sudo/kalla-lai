@@ -39,6 +39,7 @@ export function jobDto(row: Row, options: { exactLocation?: boolean; distanceKm?
     openings: row.openings === null || row.openings === undefined ? 1 : Number(row.openings),
     salaryIncrement: row.salary_increment === true,
     incrementNote: row.increment_note ?? undefined,
+    googleMapsLink: row.google_maps_link ?? undefined,
     status: row.status,
     publishedAt: row.published_at,
     createdAt: row.created_at,

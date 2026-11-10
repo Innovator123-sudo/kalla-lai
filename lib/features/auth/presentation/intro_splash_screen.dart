@@ -21,13 +21,13 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
   bool _finished = false;
   bool _videoFailed = false;
   bool _loadingVideo = false;
+  bool _soundOn = false;
   Timer? _watchdog;
-  Timer? _autoFinishTimer;
   final DateTime _startedAt = DateTime.now();
 
   void _checkDeadline() {
     if (!_finished &&
-        DateTime.now().difference(_startedAt) > const Duration(seconds: 16)) {
+        DateTime.now().difference(_startedAt) > const Duration(seconds: 20)) {
       _finish();
     }
   }
@@ -43,7 +43,7 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
     _pulse
       ..addListener(_checkDeadline)
       ..repeat(reverse: true);
-    _watchdog = Timer(const Duration(seconds: 16), _finish);
+    _watchdog = Timer(const Duration(seconds: 20), _finish);
     _initializeVideo();
   }
 
@@ -68,31 +68,10 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       _controller = controller;
       controller
         ..setLooping(false)
+        ..setVolume(0) // Always start muted — browser autoplay policy requires it
         ..addListener(_handleVideoUpdate);
 
-      // Try unmuted playback first so sound plays automatically if permitted
-      // by the browser. If blocked by the browser autoplay policy, fall back
-      // to muted immediately so playback never freezes.
-      try {
-        await controller.setVolume(1.0);
-        await controller.play();
-        if (!mounted) return;
-        _loadingVideo = false;
-        setState(() {});
-
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        if (!mounted) return;
-        if (!controller.value.isPlaying) {
-          await controller.setVolume(0);
-          await controller.play();
-          setState(() {});
-        }
-      } catch (_) {
-        try {
-          await controller.setVolume(0);
-          await controller.play();
-        } catch (_) {}
-      }
+      await controller.play();
       if (!mounted) return;
       _loadingVideo = false;
       setState(() {});
@@ -113,33 +92,33 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
     }
   }
 
-  void _scheduleAutoFinish({required Duration after}) {
-    _autoFinishTimer?.cancel();
-    _autoFinishTimer = Timer(after, _finish);
-  }
-
   void _handleVideoUpdate() {
     final controller = _controller;
     if (controller == null) return;
     if (controller.value.hasError) {
-      _scheduleAutoFinish(after: const Duration(milliseconds: 900));
+      Future<void>.delayed(const Duration(milliseconds: 900), _finish);
       return;
     }
     if (controller.value.isCompleted) _finish();
+  }
+
+  void _toggleSound() {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    setState(() => _soundOn = !_soundOn);
+    controller.setVolume(_soundOn ? 1.0 : 0);
   }
 
   void _finish() {
     if (_finished) return;
     _finished = true;
     _watchdog?.cancel();
-    _autoFinishTimer?.cancel();
     widget.onFinished();
   }
 
   @override
   void dispose() {
     _watchdog?.cancel();
-    _autoFinishTimer?.cancel();
     _finished = true;
     _pulse.dispose();
     final controller = _controller;
@@ -215,23 +194,12 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
         controller != null && controller.value.isInitialized && !_videoFailed;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: Colors.black,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () {
-          final c = _controller;
-          if (c != null && c.value.isInitialized && c.value.volume == 0) {
-            c.setVolume(1.0);
-            return;
-          }
-          _finish();
-        },
+        onTap: _finish,
         child: LayoutBuilder(
           builder: (context, outer) {
-            // Fill the whole viewport. The clip is a portrait 9:16 video drawn
-            // with BoxFit.cover, so it reaches every edge instead of sitting
-            // inside letterbox bands. On wide windows it is cropped to a
-            // centred portrait band, which keeps the logo full height.
             final maxW = math.max(0.0, outer.maxWidth);
             final maxH = math.max(0.0, outer.maxHeight);
             final height = maxH;
@@ -249,6 +217,48 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
                       _buildVideo(controller)
                     else
                       _buildFallbackLogo(logoWidth),
+
+                    // Sound toggle — top right, only shown when video is playing
+                    if (hasVideo)
+                      Positioned(
+                        top: 16,
+                        right: 16,
+                        child: SafeArea(
+                          child: GestureDetector(
+                            // Prevent tap bubbling to the full-screen skip handler
+                            onTap: () {
+                              _toggleSound();
+                            },
+                            behavior: HitTestBehavior.opaque,
+                            child: FilledButton.tonalIcon(
+                              onPressed: _toggleSound,
+                              style: FilledButton.styleFrom(
+                                backgroundColor:
+                                    Colors.black.withValues(alpha: 0.55),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              icon: Icon(
+                                _soundOn
+                                    ? Icons.volume_up_rounded
+                                    : Icons.volume_off_rounded,
+                                size: 18,
+                              ),
+                              label: Text(
+                                _soundOn ? 'Sound on' : 'Sound off',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // Skip intro — bottom centre
                     Positioned(
                       bottom: 20,
                       left: 16,
@@ -258,8 +268,10 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
                           child: TextButton(
                             onPressed: _finish,
                             style: TextButton.styleFrom(
-                              foregroundColor: Colors.white.withValues(alpha: 0.9),
-                              backgroundColor: Colors.black.withValues(alpha: 0.35),
+                              foregroundColor:
+                                  Colors.white.withValues(alpha: 0.9),
+                              backgroundColor:
+                                  Colors.black.withValues(alpha: 0.35),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 8,

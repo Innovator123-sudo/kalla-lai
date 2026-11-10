@@ -51,6 +51,7 @@ const jobInput = z
     openings: z.number().int().min(1).max(1000).default(1),
     salaryIncrement: z.boolean().default(false),
     incrementNote: z.string().trim().max(300).optional(),
+    googleMapsLink: z.string().url().max(500).optional(),
   })
   .strict();
 
@@ -146,8 +147,8 @@ router.post(
            (id, employer_id, role, description, work_mode, address, area, latitude, longitude,
             dispatch_radius_km, compensation_type, rate_npr, currency, negotiable,
             required_skills, qualifications, category, contact_phone, working_hours,
-            employment_type, openings, salary_increment, increment_note)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
+            employment_type, openings, salary_increment, increment_note, google_maps_link)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
         [
           id,
           req.user!.id,
@@ -172,6 +173,7 @@ router.post(
           body.openings,
           body.salaryIncrement,
           body.incrementNote ?? null,
+          body.googleMapsLink ?? null,
         ],
       );
       await recordAudit(tx, {
@@ -270,6 +272,7 @@ router.patch(
       openings: 'openings',
       salaryIncrement: 'salary_increment',
       incrementNote: 'increment_note',
+      googleMapsLink: 'google_maps_link',
     };
     const entries = Object.entries(body).filter(([, value]) => value !== undefined);
     if (entries.length === 0) throw errors.badRequest('NO_FIELDS', 'No supported fields were supplied.');

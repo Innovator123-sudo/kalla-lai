@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kalla_lai/core/localization/app_strings.dart';
 import 'package:kalla_lai/core/theme/kalla_lai_theme.dart';
-import 'package:kalla_lai/core/widgets/demo_banner.dart';
 import 'package:kalla_lai/features/admin/presentation/admin_people_screen.dart';
 import 'package:kalla_lai/features/auth/application/auth_cubit.dart';
 import 'package:kalla_lai/features/auth/application/auth_state.dart';
