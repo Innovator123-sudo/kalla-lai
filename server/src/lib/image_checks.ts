@@ -1,7 +1,7 @@
 import { decode as jpegDecode } from 'jpeg-js';
 import { PNG } from 'pngjs';
 import { errors } from './errors.js';
-import type { DemoDocumentType } from './demo_verification.js';
+import type { DocumentType } from './document_types.js';
 
 export interface ImageMetrics {
   width: number;
@@ -14,7 +14,7 @@ export interface ImageMetrics {
   skinRatio: number;
 }
 
-interface RgbaImage {
+export interface DecodedImage {
   width: number;
   height: number;
   data: Uint8Array | Uint8ClampedArray | Buffer;
@@ -22,7 +22,7 @@ interface RgbaImage {
 
 const MAX_SIDE = 320;
 
-function decodeDataUrl(dataUrl: string, field: string): RgbaImage {
+export function decodeDataUrl(dataUrl: string, field: string): DecodedImage {
   const match = /^data:([^;]+);base64,([\s\S]*)$/.exec(dataUrl);
   const base64 = match
     ? match[2]
@@ -63,8 +63,8 @@ function decodeDataUrl(dataUrl: string, field: string): RgbaImage {
   throw errors.badRequest('INVALID_IMAGE', `${field} must be a JPEG or PNG photo.`);
 }
 
-function downscale(img: RgbaImage): RgbaImage {
-  const scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
+export function downscaleTo(img: DecodedImage, maxSide: number): DecodedImage {
+  const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
   if (scale >= 1) return img;
   const width = Math.max(1, Math.round(img.width * scale));
   const height = Math.max(1, Math.round(img.height * scale));
@@ -84,7 +84,11 @@ function downscale(img: RgbaImage): RgbaImage {
   return { width, height, data: out };
 }
 
-function computeMetrics(img: RgbaImage): ImageMetrics {
+function downscale(img: DecodedImage): DecodedImage {
+  return downscaleTo(img, MAX_SIDE);
+}
+
+function computeMetrics(img: DecodedImage): ImageMetrics {
   const { width, height, data } = img;
   const gray = new Float32Array(width * height);
   for (let i = 0; i < width * height; i++) {
@@ -149,7 +153,7 @@ function looksLikeIllustration(m: ImageMetrics): boolean {
   return m.meanSaturation > 0.35 && m.flatRatio > 0.4;
 }
 
-const landscapeCards: DemoDocumentType[] = ['NID', 'DRIVING_LICENSE', 'VOTER_ID', 'PASSPORT'];
+const landscapeCards: DocumentType[] = ['NID', 'DRIVING_LICENSE', 'VOTER_ID', 'PASSPORT'];
 
 export function analyzeImage(dataUrl: string, field = 'Photo'): ImageMetrics {
   return computeMetrics(downscale(decodeDataUrl(dataUrl, field)));
@@ -157,7 +161,7 @@ export function analyzeImage(dataUrl: string, field = 'Photo'): ImageMetrics {
 
 export function assertDocumentImage(
   dataUrl: string,
-  documentType: DemoDocumentType,
+  documentType: DocumentType,
   side: 'front' | 'back',
 ): ImageMetrics {
   const img = decodeDataUrl(dataUrl, 'Document photo');

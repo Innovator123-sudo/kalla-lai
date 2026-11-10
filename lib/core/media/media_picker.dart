@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
 import 'web_camera.dart';
@@ -20,6 +22,51 @@ class PickedMedia {
 
   String get dataUrl => 'data:$mimeType;base64,${base64Encode(bytes)}';
   int get sizeBytes => bytes.length;
+}
+
+/// Downscales and re-encodes an image so three photos fit comfortably inside
+/// the API's request-body limit. Falls back to the original bytes when the
+/// platform cannot decode the format (for example HEIC), so the server can
+/// return a clear "JPEG or PNG" message instead of failing silently.
+Future<PickedMedia> compressPickedImage(
+  PickedMedia media, {
+  int maxSide = 1600,
+  int quality = 85,
+}) async {
+  if (!media.mimeType.startsWith('image/')) return media;
+  try {
+    final decoded = img.decodeImage(media.bytes);
+    if (decoded == null) return media;
+    var image = img.bakeOrientation(decoded);
+    final longest = math.max(image.width, image.height);
+    if (longest > maxSide) {
+      image = image.width >= image.height
+          ? img.copyResize(
+              image,
+              width: maxSide,
+              interpolation: img.Interpolation.linear,
+            )
+          : img.copyResize(
+              image,
+              height: maxSide,
+              interpolation: img.Interpolation.linear,
+            );
+    }
+    final encoded = img.encodeJpg(image, quality: quality);
+    if (encoded.length >= media.bytes.length && media.mimeType == 'image/jpeg') {
+      return media;
+    }
+    final fileName = media.fileName.contains('.')
+        ? '${media.fileName.substring(0, media.fileName.lastIndexOf('.'))}.jpg'
+        : '${media.fileName}.jpg';
+    return PickedMedia(
+      bytes: Uint8List.fromList(encoded),
+      mimeType: 'image/jpeg',
+      fileName: fileName,
+    );
+  } catch (_) {
+    return media;
+  }
 }
 
 class MediaPickException implements Exception {
@@ -58,10 +105,11 @@ Future<PickedMedia?> pickImage({
 }) async {
   if (fromCamera && kIsWeb && context != null) {
     try {
-      return await captureFromWebCamera(
+      final captured = await captureFromWebCamera(
         context,
         initialFacingMode: cameraFacingMode,
       );
+      return captured == null ? null : await compressPickedImage(captured);
     } on WebCameraException {
       // No camera or permission denied — fall through to the file picker.
     }
@@ -70,14 +118,16 @@ Future<PickedMedia?> pickImage({
     final picker = ImagePicker();
     final file = await picker.pickImage(
       source: (fromCamera && !kIsWeb) ? ImageSource.camera : ImageSource.gallery,
-      imageQuality: 85,
-      maxWidth: 1600,
+      imageQuality: 92,
+      maxWidth: 2000,
     );
     if (file == null) return null;
     final bytes = await file.readAsBytes();
     final mime =
         file.mimeType ?? _mimeFromName(file.name, 'image/jpeg');
-    return PickedMedia(bytes: bytes, mimeType: mime, fileName: file.name);
+    return await compressPickedImage(
+      PickedMedia(bytes: bytes, mimeType: mime, fileName: file.name),
+    );
   } catch (error) {
     throw MediaPickException(
       fromCamera

@@ -26,22 +26,31 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
   final _hiringSummary = TextEditingController();
   int _profileStep = 0;
   bool _consentGiven = false;
-  String _verificationMode = 'VERIFF';
+  String _verificationMode = '';
+  bool _loadingVerificationMode = true;
+
+  bool get _usesInAppCheck =>
+      _verificationMode == 'IN_APP' || _verificationMode == 'DEMO';
 
   @override
   void initState() {
     super.initState();
     final user = context.read<AuthCubit>().state.user;
     _name.text = user?.fullName ?? '';
-    if (user != null && user.onboardingComplete) {
-      _loadVerificationMode();
-    }
+    // Load the mode for every signed-in user: the API decides between the
+    // self-hosted in-app check and Veriff, and that can change after onboarding.
+    _loadVerificationMode();
   }
 
   Future<void> _loadVerificationMode() async {
     final result = await context.read<AuthCubit>().loadIdentityStatus();
-    if (!mounted || result == null) return;
-    setState(() => _verificationMode = result.verificationMode);
+    if (!mounted) return;
+    setState(() {
+      if (result != null && result.verificationMode.isNotEmpty) {
+        _verificationMode = result.verificationMode;
+      }
+      _loadingVerificationMode = false;
+    });
   }
 
   @override
@@ -82,6 +91,10 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
         },
     };
     await cubit.completeOnboarding(profile);
+    if (!mounted) return;
+    if (context.read<AuthCubit>().state.user?.onboardingComplete ?? false) {
+      await _loadVerificationMode();
+    }
   }
 
   void _skipIdentity() {
@@ -92,10 +105,23 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
 
   Future<void> _startVerification(AuthCubit cubit) async {
     if (!_consentGiven) return;
+    if (_verificationMode.isEmpty) {
+      setState(() => _loadingVerificationMode = true);
+      await _loadVerificationMode();
+      if (!mounted) return;
+      if (_verificationMode.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not start verification. Please try again.'),
+          ),
+        );
+        return;
+      }
+    }
 
-    // Demo mode runs the in-app Nepali document + selfie flow. Production
-    // launches the hosted Veriff secure check below.
-    if (_verificationMode == 'DEMO') {
+    // The self-hosted path runs the real Nepali document + selfie flow. Veriff
+    // launches the hosted secure check below.
+    if (_usesInAppCheck) {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => const DocumentVerificationScreen(),
@@ -603,7 +629,7 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
               icon: Icons.document_scanner_outlined,
               title: 'Scan your ID',
               subtitle:
-                  _verificationMode == 'DEMO'
+                  _usesInAppCheck
                       ? 'Choose a Nepali document and upload it from gallery or camera.'
                       : 'Veriff reads supported documents securely.',
             ),
@@ -623,8 +649,8 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
             const Divider(),
             const SizedBox(height: 8),
             Text(
-              _verificationMode == 'DEMO'
-                  ? 'Upload a supported Nepali ID and a selfie. Kalla-Lai runs the OCR and face-match check and stores the decision, not your biometric media.'
+              _usesInAppCheck
+                  ? 'Upload a supported Nepali ID and a selfie. Kalla-Lai reads the document, confirms its type and matches your face. Only the decision and extracted fields are stored, not your photos.'
                   : 'Your ID images and face video are handled in Veriff’s secure flow. Kalla-Lai stores the verification decision, not your biometric media.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: KallaLaiColors.muted,
@@ -649,7 +675,7 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
               _consentTile(auth.busy),
               OutlinedButton(
                 onPressed:
-                    auth.busy || !_consentGiven
+                    auth.busy || !_consentGiven || _loadingVerificationMode
                         ? null
                         : () => _startVerification(cubit),
                 child: const Text('Restart verification'),
@@ -659,7 +685,7 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
               const SizedBox(height: 8),
               FilledButton.icon(
                 onPressed:
-                    auth.busy || !_consentGiven
+                    auth.busy || !_consentGiven || _loadingVerificationMode
                         ? null
                         : () => _startVerification(cubit),
                 icon: const Icon(Icons.lock_outline),
@@ -670,7 +696,11 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                        : const Text('Continue to secure check'),
+                        : Text(
+                          _usesInAppCheck
+                              ? 'Start identity check'
+                              : 'Continue to secure check',
+                        ),
               ),
             ],
           ],

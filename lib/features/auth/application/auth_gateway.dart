@@ -273,7 +273,7 @@ class ApiAuthGateway implements AuthGateway {
     required String selfieImage,
   }) async => IdentityFlowResult.fromJson(
     await _client.postJson(
-      '/v1/verification/demo-document',
+      '/v1/verification/document',
       body: {
         'consent': true,
         'documentType': documentType,

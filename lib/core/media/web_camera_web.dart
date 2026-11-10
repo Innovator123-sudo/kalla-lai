@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:math' as math;
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
@@ -135,13 +136,18 @@ class _WebCameraScreenState extends State<_WebCameraScreen> {
     try {
       final canvas =
           web.document.createElement('canvas') as web.HTMLCanvasElement;
-      final width = _video.videoWidth;
-      final height = _video.videoHeight;
-      canvas.width = width > 0 ? width : 640;
-      canvas.height = height > 0 ? height : 480;
+      final sourceWidth = _video.videoWidth > 0 ? _video.videoWidth : 640;
+      final sourceHeight = _video.videoHeight > 0 ? _video.videoHeight : 480;
+      const maxSide = 1600;
+      final scale = math.min(
+        1.0,
+        maxSide / math.max(sourceWidth, sourceHeight),
+      );
+      canvas.width = (sourceWidth * scale).round();
+      canvas.height = (sourceHeight * scale).round();
       final ctx = canvas.getContext('2d') as web.CanvasRenderingContext2D;
-      ctx.drawImage(_video, 0, 0);
-      final dataUrl = canvas.toDataURL('image/jpeg', 0.9.toJS);
+      ctx.drawImage(_video, 0, 0, canvas.width, canvas.height);
+      final dataUrl = canvas.toDataURL('image/jpeg', 0.85.toJS);
       final bytes = base64Decode(dataUrl.split(',').last);
       if (!mounted) return;
       Navigator.of(context).pop(

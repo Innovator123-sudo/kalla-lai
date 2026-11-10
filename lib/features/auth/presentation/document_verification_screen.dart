@@ -1,10 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kalla_lai/core/media/media_picker.dart';
 import 'package:kalla_lai/core/theme/kalla_lai_theme.dart';
 import 'package:kalla_lai/features/auth/application/auth_cubit.dart';
+import 'package:kalla_lai/features/auth/application/auth_gateway.dart';
 
-enum _Step { document, upload, selfie, review, processing, done }
+enum _Step { document, upload, selfie, review, processing, done, rejected }
 
 class _DocOption {
   const _DocOption(this.code, this.label, this.subtitle, this.icon, this.color);
@@ -29,16 +32,18 @@ const _twoSidedCards = {'NID', 'DRIVING_LICENSE', 'VOTER_ID'};
 
 const _stageLabels = [
   'Checking photo quality',
-  'Reading document (OCR)',
-  'Matching face to document',
-  'Liveness check',
+  'Reading the document (Nepali → English)',
+  'Confirming the document type',
+  'Matching the name on the document',
+  'Matching your face to the document',
+  'Liveness screening',
   'Verification decision',
 ];
 
 /// In-app Nepali document verification: choose a document, capture its front
 /// (and back for two-sided cards) from the gallery or camera, take a selfie,
-/// then run the quality + OCR + face-match check. Used in demo mode; production
-/// launches the hosted Veriff flow instead.
+/// then run the real quality + Nepali OCR + document-type + name + face-match
+/// pipeline on the API.
 class DocumentVerificationScreen extends StatefulWidget {
   const DocumentVerificationScreen({super.key});
 
@@ -120,21 +125,33 @@ class _DocumentVerificationScreenState
       _processingStage = 0;
     });
 
-    final result = await cubit.submitDocumentVerification(
-      documentType: _documentType!,
-      documentImage: _documentImage!.dataUrl,
-      documentBackImage: _documentBackImage?.dataUrl,
-      selfieImage: _selfieImage!.dataUrl,
-    );
+    // The API runs the stages in one request, so advance the checklist while it
+    // works rather than claiming each stage finished. Real per-stage results
+    // come back in `verification.stages` and are shown on the next screen.
+    final ticker = Timer.periodic(const Duration(milliseconds: 900), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        if (_processingStage < _stageLabels.length - 1) _processingStage++;
+      });
+    });
 
-    for (var i = 0; i < _stageLabels.length; i++) {
-      if (!mounted) return;
-      setState(() => _processingStage = i);
-      await Future<void>.delayed(const Duration(milliseconds: 700));
+    IdentityFlowResult? result;
+    try {
+      result = await cubit.submitDocumentVerification(
+        documentType: _documentType!,
+        documentImage: _documentImage!.dataUrl,
+        documentBackImage: _documentBackImage?.dataUrl,
+        selfieImage: _selfieImage!.dataUrl,
+      );
+    } finally {
+      ticker.cancel();
     }
     if (!mounted) return;
 
-    if (result == null || result.identityStatus != 'VERIFIED') {
+    if (result == null) {
       setState(() {
         _submitting = false;
         _step = _Step.review;
@@ -144,10 +161,24 @@ class _DocumentVerificationScreenState
       });
       return;
     }
+
+    final verification = result.verification;
+    if (result.identityStatus == 'VERIFIED') {
+      setState(() {
+        _result = verification;
+        _submitting = false;
+        _step = _Step.done;
+      });
+      return;
+    }
+
+    // A rejection is a normal decision response, not a transport error. Show
+    // the exact failed stage and reason so the user knows what to fix.
     setState(() {
-      _result = result.verification;
+      _result = verification;
       _submitting = false;
-      _step = _Step.done;
+      _step = _Step.rejected;
+      _error = null;
     });
   }
 
@@ -178,6 +209,7 @@ class _DocumentVerificationScreenState
                   _Step.review => _reviewStep(),
                   _Step.processing => _processingStep(),
                   _Step.done => _doneStep(),
+                  _Step.rejected => _rejectedStep(),
                 },
                 if (_error != null) ...[
                   const SizedBox(height: 14),
@@ -199,6 +231,7 @@ class _DocumentVerificationScreenState
       _Step.review => ('Review and verify', 'Check your photos, then run the secure check.'),
       _Step.processing => ('Verifying…', 'Reading your document and matching your face.'),
       _Step.done => ('You’re verified', 'Your identity check is approved.'),
+      _Step.rejected => ('Check not passed', 'Fix the item below and try again.'),
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,8 +244,14 @@ class _DocumentVerificationScreenState
             borderRadius: BorderRadius.circular(16),
           ),
           child: Icon(
-            _step == _Step.done ? Icons.verified_outlined : Icons.shield_outlined,
-            color: KallaLaiColors.indigo,
+            _step == _Step.done
+                ? Icons.verified_outlined
+                : _step == _Step.rejected
+                    ? Icons.error_outline
+                    : Icons.shield_outlined,
+            color: _step == _Step.rejected
+                ? KallaLaiColors.errorText
+                : KallaLaiColors.indigo,
             size: 28,
           ),
         ),
@@ -449,10 +488,92 @@ class _DocumentVerificationScreenState
     ),
   );
 
+  Map<String, dynamic>? get _ocrResult =>
+      _result?['ocr'] as Map<String, dynamic>?;
+
+  Map<String, dynamic>? get _faceResult =>
+      _result?['faceMatch'] as Map<String, dynamic>?;
+
+  List<Map<String, dynamic>> get _resultStages {
+    final raw = _result?['stages'];
+    if (raw is! List) return const [];
+    return raw.whereType<Map>().map((stage) {
+      return <String, dynamic>{
+        'key': stage['key'],
+        'label': stage['label'],
+        'status': stage['status'],
+        'detail': stage['detail'],
+      };
+    }).toList();
+  }
+
+  Widget _stageList({bool showDetails = false}) {
+    if (_resultStages.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final stage in _resultStages) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                switch (stage['status']) {
+                  'passed' => Icons.check_circle,
+                  'failed' => Icons.cancel,
+                  _ => Icons.remove_circle_outline,
+                },
+                size: 18,
+                color: switch (stage['status']) {
+                  'passed' => KallaLaiColors.successText,
+                  'failed' => KallaLaiColors.errorText,
+                  _ => KallaLaiColors.muted,
+                },
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      stage['label']?.toString() ?? '',
+                      style: TextStyle(
+                        fontWeight: stage['status'] == 'failed'
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: KallaLaiColors.slate,
+                      ),
+                    ),
+                    if (showDetails &&
+                        stage['status'] == 'failed' &&
+                        (stage['detail']?.toString().isNotEmpty ?? false)) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        stage['detail'].toString(),
+                        style: const TextStyle(
+                          color: KallaLaiColors.muted,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
   Widget _doneStep() {
-    final ocr = _result?['ocr'] as Map<String, dynamic>?;
-    final face = _result?['faceMatch'] as Map<String, dynamic>?;
+    final ocr = _ocrResult;
+    final face = _faceResult;
     final score = (face?['score'] as num?)?.toDouble();
+    final name = (ocr?['fullNameEnglish']?.toString().isNotEmpty ?? false)
+        ? ocr!['fullNameEnglish'].toString()
+        : ocr?['fullName']?.toString();
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -478,22 +599,95 @@ class _DocumentVerificationScreenState
           ),
           const SizedBox(height: 16),
           _resultRow('Document', _result?['documentLabel']?.toString() ?? _documentLabel),
-          if (ocr != null) ...[
-            _resultRow('Name (OCR)', ocr['fullName']?.toString() ?? '—'),
-            _resultRow('Document no. (OCR)', ocr['documentNumber']?.toString() ?? '—'),
-          ],
+          if (name != null && name.isNotEmpty) _resultRow('Name (OCR)', name),
+          if (ocr?['documentNumber'] != null &&
+              ocr!['documentNumber'].toString().isNotEmpty)
+            _resultRow('Document no.', ocr['documentNumber'].toString()),
           if (score != null)
             _resultRow('Face match', '${(score * 100).toStringAsFixed(0)}%'),
           const SizedBox(height: 8),
+          _stageList(),
+          const SizedBox(height: 8),
           Text(
             _result?['note']?.toString() ??
-                'Demo verification — synthetic OCR and face-match result.',
+            'Only the verification decision and the extracted document fields are stored. Your photos are not kept. Passive liveness screening is a screening step, not a guarantee against sophisticated spoofing.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: KallaLaiColors.muted, height: 1.4),
           ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: () => Navigator.of(context).maybePop(),
             child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rejectedStep() {
+    final reason =
+        _result?['reason']?.toString() ??
+        _error ??
+        'The verification checks did not pass. Retake your photos and try again.';
+    final ocr = _ocrResult;
+    final name = (ocr?['fullNameEnglish']?.toString().isNotEmpty ?? false)
+        ? ocr!['fullNameEnglish'].toString()
+        : ocr?['fullName']?.toString();
+    final detected = _result?['documentCheck'] is Map<String, dynamic>
+        ? (_result!['documentCheck'] as Map<String, dynamic>)['detectedLabel']
+              ?.toString()
+        : null;
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(KallaLaiRadii.md),
+              border: Border.all(color: const Color(0xFFFECACA)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.error_outline, color: KallaLaiColors.errorText, size: 26),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    reason,
+                    style: const TextStyle(
+                      color: KallaLaiColors.errorText,
+                      fontWeight: FontWeight.w600,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (detected != null && detected.isNotEmpty)
+            _resultRow('Document looks like', detected),
+          if (name != null && name.isNotEmpty) _resultRow('Name read', name),
+          if (ocr?['documentNumber'] != null &&
+              ocr!['documentNumber'].toString().isNotEmpty)
+            _resultRow('Document no.', ocr['documentNumber'].toString()),
+          const SizedBox(height: 8),
+          _stageList(showDetails: true),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: () => setState(() => _step = _Step.upload),
+            icon: const Icon(Icons.photo_camera_outlined),
+            label: const Text('Retake photos'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: () => setState(() {
+              _documentType = null;
+              _step = _Step.document;
+            }),
+            child: const Text('Choose a different document'),
           ),
         ],
       ),

@@ -92,6 +92,7 @@ export function createApp() {
   // they need a larger body limit than the default JSON parser below. These run
   // first; the global parser skips requests whose body is already parsed.
   app.use('/v1/uploads', express.json({ limit: '30mb' }));
+  app.use('/v1/verification/document', express.json({ limit: '16mb' }));
   app.use('/v1/verification/demo-document', express.json({ limit: '16mb' }));
 
   app.use(express.json({ limit: '1mb' }));

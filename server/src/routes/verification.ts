@@ -5,30 +5,41 @@ import { config } from '../config.js';
 import { db, withTransaction } from '../db/index.js';
 import { recordAudit } from '../lib/audit.js';
 import { authenticate } from '../lib/auth.js';
-import { AppError, errors } from '../lib/errors.js';
+import { errors } from '../lib/errors.js';
 import { asyncHandler } from '../lib/http.js';
 import { parseBody } from '../lib/validation.js';
 import { newId } from '../lib/crypto.js';
 import { createVeriffSession, isVeriffSignatureValid } from '../lib/veriff.js';
-import { runDemoDocumentVerification } from '../lib/demo_verification.js';
+import {
+  runInAppVerification,
+  type InAppVerificationResult,
+} from '../lib/in_app_verification.js';
 
 const router = Router();
 const consentVersion = 'identity-verification-v1';
 const sessionSchema = z.object({ consent: z.literal(true) });
 
-// The in-app demo document flow is offered only when DEMO_MODE is on and no
-// real Veriff credentials are configured. Otherwise the client uses Veriff.
-function verificationMode(): 'DEMO' | 'VERIFF' {
-  return config.DEMO_MODE && !config.VERIFF_API_KEY ? 'DEMO' : 'VERIFF';
+/**
+ * Veriff is used only when all of its credentials are configured. Otherwise the
+ * real self-hosted pipeline (OCR + document check + face match) is used. The
+ * old synthetic DEMO mode is gone: `IN_APP` performs real checks.
+ */
+function verificationMode(): 'VERIFF' | 'IN_APP' {
+  return config.VERIFF_API_KEY &&
+    config.VERIFF_BASE_URL &&
+    config.VERIFF_SHARED_SECRET
+    ? 'VERIFF'
+    : 'IN_APP';
 }
 
-const demoDocumentSchema = z.object({
+const documentSchema = z.object({
   consent: z.literal(true),
   documentType: z.enum(['CITIZENSHIP', 'NID', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID']),
   documentImage: z.string().min(100).max(16_000_000),
   documentBackImage: z.string().min(100).max(16_000_000).optional(),
   selfieImage: z.string().min(100).max(16_000_000),
 });
+
 const sessionLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   limit: 5,
@@ -36,16 +47,61 @@ const sessionLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// The demo flow is synthetic and already rejects already-verified accounts, so
-// it gets a generous per-user budget instead of the tight IP-keyed Veriff one
-// (which local testing on a single IP would otherwise exhaust).
-const demoDocumentLimiter = rateLimit({
+// OCR and face matching are CPU-heavy, so each account gets a generous but
+// finite attempt budget. Keyed by user so shared IPs (offices, NAT) are fine.
+const documentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 30,
+  limit: 20,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: (req) => req.user?.id ?? 'anonymous',
 });
+
+/** Stores the decision and extracted fields, never the photos or OCR text. */
+function persistedDetail(result: InAppVerificationResult) {
+  return {
+    decision: result.decision,
+    rejectionCode: result.rejectionCode,
+    reason: result.reason,
+    documentLabel: result.documentLabel,
+    detectedType: result.documentCheck.detectedType,
+    detectedLabel: result.documentCheck.detectedLabel,
+    documentConfidence: result.documentCheck.confidence,
+    ocrConfidence: result.ocr.confidence,
+    extractedFields: {
+      fullName: result.ocr.fullName,
+      fullNameEnglish: result.ocr.fullNameEnglish,
+      documentNumber: result.ocr.documentNumber,
+      dateOfBirth: result.ocr.dateOfBirth,
+      address: result.ocr.address,
+      addressEnglish: result.ocr.addressEnglish,
+    },
+    nameMatch: {
+      passed: result.nameMatch.passed,
+      similarity: result.nameMatch.similarity,
+      matchedTokens: result.nameMatch.matchedTokens,
+    },
+    faceMatch: result.faceMatch
+      ? {
+          passed: result.faceMatch.passed,
+          faceMatched: result.faceMatch.faceMatched,
+          score: result.faceMatch.score,
+          distance: result.faceMatch.distance,
+          threshold: result.faceMatch.threshold,
+          livenessPassed: result.faceMatch.livenessPassed,
+          livenessScore: result.faceMatch.livenessScore,
+          realScore: result.faceMatch.realScore,
+          documentFaceCount: result.faceMatch.documentFaceCount,
+          selfieFaceCount: result.faceMatch.selfieFaceCount,
+        }
+      : null,
+    stages: result.stages.map((stage) => ({
+      key: stage.key,
+      status: stage.status,
+    })),
+    checks: result.checks,
+  };
+}
 
 router.get(
   '/me',
@@ -151,6 +207,12 @@ router.post(
   authenticate,
   sessionLimiter,
   asyncHandler(async (req, res) => {
+    if (verificationMode() !== 'VERIFF') {
+      throw errors.unavailable(
+        'VERIFF_NOT_CONFIGURED',
+        'The secure Veriff check is not available. Use the in-app document check instead.',
+      );
+    }
     const body = sessionSchema.safeParse(req.body);
     if (!body.success) {
       throw errors.validation(
@@ -209,6 +271,7 @@ router.post(
       sessionUrl: session.url,
       onboardingComplete: true,
       identityStatus: 'PENDING',
+      mode: 'VERIFF',
     });
   }),
 );
@@ -305,116 +368,99 @@ router.post(
   }),
 );
 
-router.post(
-  '/demo-document',
-  authenticate,
-  demoDocumentLimiter,
-  asyncHandler(async (req, res) => {
-    if (verificationMode() !== 'DEMO') {
-      throw errors.unavailable(
-        'VERIFICATION_UNAVAILABLE',
-        'In-app demo verification is not enabled on this server. Use the secure Veriff check.',
-      );
-    }
-    const body = parseBody(demoDocumentSchema, req.body);
-    const user = await db().query<{
-      identity_status: string;
-      onboarding_complete: boolean;
-      full_name: string;
-    }>(
-      'SELECT identity_status, onboarding_complete, full_name FROM users WHERE id = $1 AND status = $2',
-      [req.user!.id, 'ACTIVE'],
+/**
+ * Real in-app identity check: Nepali OCR → English fields → selected document
+ * type → name match → strict face match + passive liveness. `/demo-document`
+ * remains as a compatibility alias for older clients.
+ */
+const submitDocument = asyncHandler(async (req, res) => {
+  if (verificationMode() !== 'IN_APP') {
+    throw errors.unavailable(
+      'IN_APP_VERIFICATION_UNAVAILABLE',
+      'The in-app document check is not enabled on this server. Use the secure Veriff check.',
     );
-    const row = user.rows[0];
-    if (!row) throw errors.notFound('Account not found.');
-    if (!row.onboarding_complete) {
-      throw errors.forbidden('Complete your profile before identity verification.');
-    }
-    if (row.identity_status === 'VERIFIED') {
-      throw errors.conflict('ALREADY_VERIFIED', 'Your identity is already verified.');
-    }
+  }
+  const body = parseBody(documentSchema, req.body);
+  const user = await db().query<{
+    identity_status: string;
+    onboarding_complete: boolean;
+    full_name: string;
+  }>(
+    'SELECT identity_status, onboarding_complete, full_name FROM users WHERE id = $1 AND status = $2',
+    [req.user!.id, 'ACTIVE'],
+  );
+  const row = user.rows[0];
+  if (!row) throw errors.notFound('Account not found.');
+  if (!row.onboarding_complete) {
+    throw errors.forbidden('Complete your profile before identity verification.');
+  }
+  if (row.identity_status === 'VERIFIED') {
+    throw errors.conflict('ALREADY_VERIFIED', 'Your identity is already verified.');
+  }
 
-    let result;
-    try {
-      result = runDemoDocumentVerification({
-        documentType: body.documentType,
-        documentImage: body.documentImage,
-        documentBackImage: body.documentBackImage,
-        selfieImage: body.selfieImage,
-        fullName: row.full_name,
-      });
-    } catch (error) {
-      // The image gates rejected the submission. Persist the decision (not the
-      // raw media) so the account can retake, then surface the reason.
-      if (error instanceof AppError) {
-        const rejectionId = newId();
-        await withTransaction(async (tx) => {
-          await tx.query(
-            `INSERT INTO identity_verifications
-               (id, user_id, provider, provider_session_id, state, consent_version,
-                consented_at, decided_at, document_type, detail)
-             VALUES ($1, $2, 'DEMO', $3, 'NEEDS_ACTION', $4, now(), now(), $5, $6)`,
-            [
-              rejectionId,
-              req.user!.id,
-              rejectionId,
-              consentVersion,
-              body.documentType,
-              JSON.stringify({ decision: 'REJECTED', code: error.code, reason: error.message, demo: true }),
-            ],
-          );
-          await tx.query(
-            `UPDATE users SET identity_status = 'NEEDS_ACTION', updated_at = now() WHERE id = $1`,
-            [req.user!.id],
-          );
-          await recordAudit(tx, {
-            actorId: req.user!.id,
-            action: 'identity.verification_rejected',
-            resourceType: 'identity_verification',
-            resourceId: rejectionId,
-            correlationId: req.requestId,
-            metadata: { provider: 'DEMO', documentType: body.documentType, code: error.code },
-          });
-        });
-      }
-      throw error;
-    }
+  const result = await runInAppVerification({
+    documentType: body.documentType,
+    documentImage: body.documentImage,
+    documentBackImage: body.documentBackImage,
+    selfieImage: body.selfieImage,
+    fullName: row.full_name,
+  });
 
-    const verificationId = newId();
-    await withTransaction(async (tx) => {
-      await tx.query(
-        `INSERT INTO identity_verifications
-           (id, user_id, provider, provider_session_id, state, consent_version,
-            consented_at, decided_at, document_type, detail)
-         VALUES ($1, $2, 'DEMO', $3, 'VERIFIED', $4, now(), now(), $5, $6)`,
-        [verificationId, req.user!.id, verificationId, consentVersion, body.documentType, JSON.stringify(result)],
-      );
-      await tx.query(
-        `UPDATE users SET identity_status = 'VERIFIED', updated_at = now() WHERE id = $1`,
-        [req.user!.id],
-      );
+  const verificationId = newId();
+  const detail = persistedDetail(result);
+  await withTransaction(async (tx) => {
+    await tx.query(
+      `INSERT INTO identity_verifications
+         (id, user_id, provider, provider_session_id, state, consent_version,
+          consented_at, decided_at, document_type, detail)
+       VALUES ($1, $2, 'IN_APP', $3, $4, $5, now(), now(), $6, $7)`,
+      [
+        verificationId,
+        req.user!.id,
+        verificationId,
+        result.verified ? 'VERIFIED' : 'NEEDS_ACTION',
+        consentVersion,
+        body.documentType,
+        JSON.stringify(detail),
+      ],
+    );
+    await tx.query(
+      `UPDATE users SET identity_status = $1, updated_at = now() WHERE id = $2`,
+      [result.verified ? 'VERIFIED' : 'NEEDS_ACTION', req.user!.id],
+    );
+    if (result.verified) {
       await tx.query(
         `UPDATE worker_profiles SET verification_status = 'VERIFIED', updated_at = now()
           WHERE user_id = $1`,
         [req.user!.id],
       );
-      await recordAudit(tx, {
-        actorId: req.user!.id,
-        action: 'identity.verification_decided',
-        resourceType: 'identity_verification',
-        resourceId: verificationId,
-        correlationId: req.requestId,
-        metadata: { provider: 'DEMO', documentType: body.documentType, decision: 'VERIFIED' },
-      });
+    }
+    await recordAudit(tx, {
+      actorId: req.user!.id,
+      action: result.verified
+        ? 'identity.verification_decided'
+        : 'identity.verification_rejected',
+      resourceType: 'identity_verification',
+      resourceId: verificationId,
+      correlationId: req.requestId,
+      metadata: {
+        provider: 'IN_APP',
+        documentType: body.documentType,
+        decision: result.decision,
+        rejectionCode: result.rejectionCode,
+      },
     });
+  });
 
-    res.status(201).json({
-      onboardingComplete: true,
-      identityStatus: 'VERIFIED',
-      mode: 'DEMO',
-      verification: result,
-    });
-  }),
-);
+  res.status(201).json({
+    onboardingComplete: true,
+    identityStatus: result.verified ? 'VERIFIED' : 'NEEDS_ACTION',
+    mode: 'IN_APP',
+    verification: result,
+  });
+});
+
+router.post('/document', authenticate, documentLimiter, submitDocument);
+router.post('/demo-document', authenticate, documentLimiter, submitDocument);
 
 export default router;
