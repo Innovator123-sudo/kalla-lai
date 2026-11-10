@@ -62,29 +62,41 @@
     })();
   </script>
   <script>
-    // One-time cache reset for clients that still have the old Cloudflare
-    // tunnel build cached by Flutter's service worker. The retired URL is no
-    // longer compiled into the app; clearing the worker and its caches makes
-    // sure every browser fetches the current bundle after this deploy.
+    // Cache reset for clients that still have the old Cloudflare tunnel build
+    // cached by Flutter's service worker. The retired URL is no longer compiled
+    // into the app; clearing the worker, its caches, and the old override key
+    // makes sure every browser fetches the current bundle after this deploy.
+    //
+    // A client whose old worker cached index.html will not see this script
+    // until the worker updates. Opening the page once with `?fresh=1` bypasses
+    // that cache (different query string) and lets this cleanup run.
     (function () {
       if (['localhost', '127.0.0.1', '[::1]'].indexOf(location.hostname) !== -1) {
         return;
       }
       var key = 'kalla_lai.web_cache_version';
-      var version = '2026-11-10-vercel-api';
+      var version = '2026-11-10-vercel-api-2';
       var fresh = location.search.indexOf('fresh=1') !== -1;
       try {
-        if (fresh) {
-          localStorage.setItem(key, version);
-          return;
-        }
+        // The old build let users save an API URL in local storage. Nothing
+        // reads it now, but delete it so a stale value cannot linger.
+        localStorage.removeItem('kalla_lai.api_url.v1');
         if (localStorage.getItem(key) === version) return;
       } catch (e) {
-        return;
+        // Storage is unavailable (private mode, blocked cookies). Loading the
+        // current bundle is still possible, so keep going.
       }
-      var reload = function () {
-        if (location.search.indexOf('fresh=1') !== -1) return;
-        location.replace(location.pathname + '?fresh=1' + location.hash);
+      var finish = function () {
+        try {
+          localStorage.setItem(key, version);
+        } catch (e) {
+          // Ignore storage failures.
+        }
+        if (!fresh) {
+          location.replace(location.pathname + '?fresh=1' + location.hash);
+        }
+        // When the URL already has `?fresh=1` there is no second navigation:
+        // the caches are empty now, so the browser fetches the new bundle.
       };
       var jobs = [];
       if ('serviceWorker' in navigator) {
@@ -105,10 +117,10 @@
           })
         );
       }
-      var timer = setTimeout(reload, 1500);
+      var timer = setTimeout(finish, 2500);
       Promise.all(jobs).catch(function () {}).then(function () {
         clearTimeout(timer);
-        reload();
+        finish();
       });
     })();
   </script>
