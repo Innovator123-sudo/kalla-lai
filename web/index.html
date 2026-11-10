@@ -4,13 +4,13 @@
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="A trusted work marketplace connecting verified workers with employers across Nepal.">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="kalla_lai">
+  <meta name="apple-mobile-web-app-title" content="Kalla-Lai">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
   <link rel="icon" type="image/png" href="favicon.png"/>
-  <title>kalla_lai</title>
+  <title>कल्ला-लाई — Kalla-Lai | Work, verified.</title>
   <link rel="manifest" href="manifest.json">
   <style>
     html, body {
@@ -30,15 +30,19 @@
       function prepare(v) {
         if (!v || seen.has(v)) return;
         seen.add(v);
-        v.muted = true;
-        v.defaultMuted = true;
         v.playsInline = true;
-        v.setAttribute('muted', '');
         v.setAttribute('playsinline', '');
         var play = function () {
           if (!v.paused) return;
           var p = v.play();
-          if (p && p.catch) p.catch(function () {});
+          if (p && p.catch) {
+            p.catch(function () {
+              // Browser blocked unmuted autoplay: fall back to muted
+              v.muted = true;
+              v.setAttribute('muted', '');
+              v.play().catch(function () {});
+            });
+          }
         };
         play();
         v.addEventListener('loadeddata', play, { once: true });

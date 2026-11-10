@@ -102,23 +102,15 @@ class _LoginCardState extends State<_LoginCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const DemoBanner(),
-        const SizedBox(height: 22),
+        const SizedBox(height: 28),
         Image.asset(
           'assets/images/kalla_lai_logo.png',
           height: 100,
           fit: BoxFit.contain,
           semanticLabel: 'कल्ला-लाई',
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Text(strings.text('login_subtitle'), textAlign: TextAlign.center),
-        if (journey.intent != null) ...[
-          const SizedBox(height: 14),
-          _PathBanner(
-            intent: journey.intent!,
-            onChange: () => context.read<EntryJourneyCubit>().changeIntent(),
-          ),
-        ],
         const SizedBox(height: 20),
         Card(
           child: Padding(

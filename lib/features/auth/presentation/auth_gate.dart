@@ -70,12 +70,9 @@ class _AuthGateState extends State<AuthGate> {
                 return const MainShellScreen();
               }
 
-              if (journey.intent == null && !journey.staffLogin) {
-                return const IntentSelectionScreen();
-              }
-              if (!journey.surveyComplete && !journey.staffLogin) {
-                return const SurveyScreen();
-              }
+              // Proceed directly to the sign-in / registration screen. Role
+              // choice (Worker vs Employer/Hirer) is confirmed only once during
+              // account creation or Google sign-in.
               return const LoginScreen();
             },
           );

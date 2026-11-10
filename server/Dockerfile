@@ -12,6 +12,7 @@ RUN npm ci --no-audit --no-fund
 
 COPY tsconfig.json ./
 COPY src ./src
+COPY scripts ./scripts
 RUN npm run build \
  && npm prune --omit=dev
 
@@ -29,6 +30,7 @@ WORKDIR /app
 COPY --from=build --chown=10001:10001 /app/package.json ./
 COPY --from=build --chown=10001:10001 /app/node_modules ./node_modules
 COPY --from=build --chown=10001:10001 /app/dist ./dist
+COPY --from=build --chown=10001:10001 /app/assets ./assets
 # tsc does not copy .sql files; the migrator resolves them next to dist/db.
 COPY --from=build --chown=10001:10001 /app/src/db/migrations ./dist/db/migrations
 

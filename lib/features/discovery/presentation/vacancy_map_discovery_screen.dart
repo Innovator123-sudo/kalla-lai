@@ -11,6 +11,7 @@ import 'package:kalla_lai/core/widgets/status_pill.dart';
 import 'package:kalla_lai/features/discovery/application/discovery_state.dart';
 import 'package:kalla_lai/features/discovery/application/vacancy_discovery_cubit.dart';
 import 'package:kalla_lai/features/shared/domain/marketplace_models.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class VacancyMapDiscoveryScreen extends StatelessWidget {
   const VacancyMapDiscoveryScreen({
@@ -619,6 +620,23 @@ class _JobDetailsSheetState extends State<_JobDetailsSheet> {
             const _DetailLine(
               icon: Icons.radar,
               text: 'Approximate work area · exact address after confirmation',
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () {
+                String targetUrl;
+                final urlMatch = RegExp(r'https?://[^\s]+(?:google\.com/maps|maps\.app\.goo\.gl)[^\s]*').firstMatch(job.description);
+                if (urlMatch != null) {
+                  targetUrl = urlMatch.group(0)!;
+                } else if (job.location.latitude != 0 && job.location.longitude != 0) {
+                  targetUrl = 'https://www.google.com/maps/dir/?api=1&destination=${job.location.latitude},${job.location.longitude}';
+                } else {
+                  targetUrl = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(job.area)}';
+                }
+                launchUrl(Uri.parse(targetUrl), mode: LaunchMode.externalApplication);
+              },
+              icon: const Icon(Icons.directions_outlined),
+              label: const Text('Open directions in Google Maps'),
             ),
             const SizedBox(height: 12),
             Text(job.description),

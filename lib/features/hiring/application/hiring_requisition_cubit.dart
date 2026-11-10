@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:kalla_lai/core/location/device_location.dart';
 import 'package:kalla_lai/core/networking/api_client.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 enum HiringStep { work, schedule, budget, review }
 
@@ -23,6 +24,7 @@ class HiringWizardState extends Equatable {
     this.incrementNote = '',
     this.compensationType = 'DAILY',
     this.negotiable = true,
+    this.googleMapsLink = '',
     this.latitude,
     this.longitude,
     this.locating = false,
@@ -51,6 +53,7 @@ class HiringWizardState extends Equatable {
   final String incrementNote;
   final String compensationType;
   final bool negotiable;
+  final String googleMapsLink;
   final double? latitude;
   final double? longitude;
   final bool locating;
@@ -72,8 +75,11 @@ class HiringWizardState extends Equatable {
     if (trimmedDetails.length >= 10) parts.add(trimmedDetails);
     final trimmedCompany = companyInfo.trim();
     if (trimmedCompany.isNotEmpty) parts.add('About us: $trimmedCompany');
+    final trimmedMaps = googleMapsLink.trim();
+    if (trimmedMaps.isNotEmpty) parts.add('Google Maps: $trimmedMaps');
     if (parts.isNotEmpty) return parts.join('\n\n');
-    return '$role needed in $area. Shift window: $shiftLabel.';
+    return '$role needed in $area. Shift window: $shiftLabel.' +
+        (trimmedMaps.isNotEmpty ? '\nGoogle Maps: $trimmedMaps' : '');
   }
 
   HiringWizardState copyWith({
@@ -93,6 +99,7 @@ class HiringWizardState extends Equatable {
     String? incrementNote,
     String? compensationType,
     bool? negotiable,
+    String? googleMapsLink,
     double? latitude,
     double? longitude,
     bool? locating,
@@ -124,6 +131,7 @@ class HiringWizardState extends Equatable {
       incrementNote: incrementNote ?? this.incrementNote,
       compensationType: compensationType ?? this.compensationType,
       negotiable: negotiable ?? this.negotiable,
+      googleMapsLink: googleMapsLink ?? this.googleMapsLink,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       locating: locating ?? this.locating,
@@ -155,6 +163,7 @@ class HiringWizardState extends Equatable {
     incrementNote,
     compensationType,
     negotiable,
+    googleMapsLink,
     latitude,
     longitude,
     locating,
@@ -173,36 +182,80 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
 
   final ApiClient _client;
 
-  void setRole(String value) =>
-      emit(state.copyWith(role: value, clearError: true));
-  void setJobType(String title, String category) =>
-      emit(state.copyWith(role: title, category: category, clearError: true));
-  void setArea(String value) =>
-      emit(state.copyWith(area: value, clearError: true));
-  void setDetails(String value) =>
-      emit(state.copyWith(details: value, clearError: true));
-  void setCompanyInfo(String value) =>
-      emit(state.copyWith(companyInfo: value, clearError: true));
-  void setShift(String value) =>
-      emit(state.copyWith(shiftLabel: value, clearError: true));
-  void setRate(int value) =>
-      emit(state.copyWith(rateNpr: value, clearError: true));
-  void setContactPhone(String value) =>
-      emit(state.copyWith(contactPhone: value, clearError: true));
-  void setWorkingHours(String value) =>
-      emit(state.copyWith(workingHours: value, clearError: true));
-  void setEmploymentType(String value) =>
-      emit(state.copyWith(employmentType: value, clearError: true));
-  void setOpenings(int value) =>
-      emit(state.copyWith(openings: value.clamp(1, 1000), clearError: true));
-  void setSalaryIncrement(bool value) =>
-      emit(state.copyWith(salaryIncrement: value, clearError: true));
-  void setIncrementNote(String value) =>
-      emit(state.copyWith(incrementNote: value, clearError: true));
-  void setCompensationType(String value) =>
-      emit(state.copyWith(compensationType: value, clearError: true));
-  void setNegotiable(bool value) =>
-      emit(state.copyWith(negotiable: value, clearError: true));
+  void setRole(String role) =>
+      emit(state.copyWith(role: role, clearError: true));
+  void setCategory(String category) =>
+      emit(state.copyWith(category: category, clearError: true));
+  void setArea(String area) =>
+      emit(state.copyWith(area: area, clearError: true));
+  void setDetails(String details) =>
+      emit(state.copyWith(details: details, clearError: true));
+  void setCompanyInfo(String companyInfo) =>
+      emit(state.copyWith(companyInfo: companyInfo, clearError: true));
+  void setShiftLabel(String shiftLabel) =>
+      emit(state.copyWith(shiftLabel: shiftLabel, clearError: true));
+  void setRateNpr(int rateNpr) =>
+      emit(state.copyWith(rateNpr: rateNpr, clearError: true));
+  void setContactPhone(String phone) =>
+      emit(state.copyWith(contactPhone: phone, clearError: true));
+  void setWorkingHours(String hours) =>
+      emit(state.copyWith(workingHours: hours, clearError: true));
+  void setEmploymentType(String type) =>
+      emit(state.copyWith(employmentType: type, clearError: true));
+  void setOpenings(int openings) =>
+      emit(state.copyWith(openings: openings, clearError: true));
+  void setSalaryIncrement(bool increment) =>
+      emit(state.copyWith(salaryIncrement: increment, clearError: true));
+  void setIncrementNote(String note) =>
+      emit(state.copyWith(incrementNote: note, clearError: true));
+  void setCompensationType(String type) =>
+      emit(state.copyWith(compensationType: type, clearError: true));
+  void setNegotiable(bool negotiable) =>
+      emit(state.copyWith(negotiable: negotiable, clearError: true));
+
+  void setGoogleMapsLink(String link) {
+    final trimmed = link.trim();
+    double? lat = state.latitude;
+    double? lng = state.longitude;
+
+    // Check for coordinates in string: e.g. "27.7172, 85.3240"
+    final coordMatch = RegExp(r'(-?\d{1,3}\.\d+)[,\s]+(-?\d{1,3}\.\d+)').firstMatch(trimmed);
+    if (coordMatch != null) {
+      lat = double.tryParse(coordMatch.group(1)!);
+      lng = double.tryParse(coordMatch.group(2)!);
+    } else {
+      // Check for URL with @lat,lng or q=lat,lng
+      final urlMatch = RegExp(r'[@?&](?:q|ll)?=?(-?\d{1,3}\.\d+)[,](-?\d{1,3}\.\d+)').firstMatch(trimmed);
+      if (urlMatch != null) {
+        lat = double.tryParse(urlMatch.group(1)!);
+        lng = double.tryParse(urlMatch.group(2)!);
+      }
+    }
+
+    emit(
+      state.copyWith(
+        googleMapsLink: trimmed,
+        latitude: lat,
+        longitude: lng,
+        clearError: true,
+      ),
+    );
+  }
+
+  Future<void> openDirections() async {
+    final link = state.googleMapsLink.trim();
+    String targetUrl;
+    if (link.startsWith('http://') || link.startsWith('https://')) {
+      targetUrl = link;
+    } else if (state.latitude != null && state.longitude != null) {
+      targetUrl = 'https://www.google.com/maps/dir/?api=1&destination=${state.latitude},${state.longitude}';
+    } else if (state.area.trim().isNotEmpty) {
+      targetUrl = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(state.area.trim())}';
+    } else {
+      return;
+    }
+    await launchUrl(Uri.parse(targetUrl), mode: LaunchMode.externalApplication);
+  }
 
   Future<void> useMyLocation() async {
     if (state.locating) return;
@@ -212,10 +265,9 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
       if (isClosed) return;
       emit(
         state.copyWith(
+          locating: false,
           latitude: position.latitude,
           longitude: position.longitude,
-          locating: false,
-          notice: 'True location captured for this job.',
         ),
       );
     } on DeviceLocationException catch (error) {
@@ -270,8 +322,6 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
     }
   }
 
-  /// Explicit "no server call" request from the UI. Always produces a local
-  /// preview and never touches the network or pretends anything was published.
   void submitLocalPreview() {
     emit(
       state.copyWith(
@@ -285,10 +335,6 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
     );
   }
 
-  /// Sends the requisition to the API when a session token exists.
-  ///
-  /// The server decides whether the caller may post (EMPLOYER role) and always
-  /// stores the result as a DRAFT — nothing is published from the client.
   Future<void> submit() async {
     if (_client.accessToken == null) {
       submitLocalPreview();
@@ -304,8 +350,6 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
           'description': state.composedDescription,
           'workMode': 'ON_SITE',
           'area': state.area.trim(),
-          // True device location when captured; otherwise an approximate
-          // city-centre pin. Exact address stays an employer decision later.
           'latitude': state.latitude ?? 27.7172,
           'longitude': state.longitude ?? 85.3240,
           'dispatchRadiusKm': 10,
@@ -327,17 +371,26 @@ class HiringRequisitionCubit extends Cubit<HiringWizardState> {
       );
       final job = json['job'];
       final id = job is Map<String, dynamic> ? job['id']?.toString() : null;
-      final status =
-          job is Map<String, dynamic> ? job['status']?.toString() : null;
+
+      // Automatically publish the job immediately so workers can discover it!
+      bool published = false;
+      if (id != null) {
+        try {
+          await _client.postJson('/v1/jobs/$id/publish');
+          published = true;
+        } catch (_) {}
+      }
+
       if (isClosed) return;
       emit(
         state.copyWith(
           submitting: false,
           submitted: true,
           serverJobId: id,
-          serverDraft: status != 'PUBLISHED',
-          notice:
-              'Saved on the server as a draft. Publish it from the employer console to make it discoverable.',
+          serverDraft: !published,
+          notice: published
+              ? 'Shift published successfully! It is now live on the worker vacancy map.'
+              : 'Saved as draft on the server.',
         ),
       );
     } on ApiException catch (error) {

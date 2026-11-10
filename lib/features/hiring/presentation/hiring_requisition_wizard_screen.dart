@@ -304,11 +304,31 @@ class _WizardStepContent extends StatelessWidget {
                   : const Icon(Icons.my_location),
               label: Text(state.hasTrueLocation ? 'True location captured' : 'Use my true location'),
             ),
+            const SizedBox(height: 12),
+            TextFormField(
+              initialValue: state.googleMapsLink,
+              decoration: const InputDecoration(
+                labelText: 'Google Maps Link or Pin (optional)',
+                hintText: 'e.g. https://maps.app.goo.gl/... or 27.7172, 85.3240',
+                prefixIcon: Icon(Icons.map_outlined),
+                helperText: 'Paste a Google Maps link to show exact directions to workers.',
+              ),
+              onChanged: cubit.setGoogleMapsLink,
+            ),
+            if (state.googleMapsLink.isNotEmpty || state.hasTrueLocation)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TextButton.icon(
+                  onPressed: cubit.openDirections,
+                  icon: const Icon(Icons.directions_outlined),
+                  label: const Text('Preview directions in Google Maps'),
+                ),
+              ),
             if (state.hasTrueLocation)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  'Pin: ${state.latitude!.toStringAsFixed(5)}, ${state.longitude!.toStringAsFixed(5)}',
+                  'GPS Pin: ${state.latitude!.toStringAsFixed(5)}, ${state.longitude!.toStringAsFixed(5)}',
                   style: const TextStyle(color: KallaLaiColors.muted, fontSize: 12),
                 ),
               ),
@@ -457,8 +477,10 @@ class _WizardStepContent extends StatelessWidget {
             _SummaryLine(label: 'Job', value: state.role),
             _SummaryLine(label: 'Category', value: state.category),
             _SummaryLine(label: 'Location', value: state.area),
+            if (state.googleMapsLink.isNotEmpty)
+              _SummaryLine(label: 'Google Maps', value: state.googleMapsLink),
             if (state.hasTrueLocation)
-              const _SummaryLine(label: 'GPS pin', value: 'True location captured'),
+              const _SummaryLine(label: 'GPS pin', value: 'Location captured'),
             if (state.workingHours.trim().isNotEmpty)
               _SummaryLine(label: 'Hours', value: state.workingHours.trim()),
             _SummaryLine(label: 'Type', value: _employmentTypes[state.employmentType] ?? state.employmentType),
@@ -611,7 +633,7 @@ class _SubmittedView extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               wentToServer
-                  ? 'Draft saved on the server'
+                  ? 'Shift published live!'
                   : 'Local preview ready',
               style: Theme.of(context).textTheme.headlineSmall,
               textAlign: TextAlign.center,
@@ -619,15 +641,31 @@ class _SubmittedView extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               wentToServer
-                  ? '${state.role} · job ${state.serverJobId}. Status: draft — publish it from the employer console. Nothing was published automatically and no payment moved.'
-                  : '${state.role} · kept on this device only. Nothing was sent to the server, no listing was published, and no payment was initiated.',
+                  ? '${state.role} is now live! Workers nearby can find and apply for this shift immediately.'
+                  : '${state.role} · kept on this device only. Nothing was sent to the server.',
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: () => cubit.startAnother(),
-              icon: const Icon(Icons.add),
-              label: const Text('Create another'),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => cubit.startAnother(),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Post another'),
+                ),
+                if (wentToServer) ...[
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      context.read<ModeSwitcherCubit>().select(AppMode.vacancy);
+                      cubit.startAnother();
+                    },
+                    icon: const Icon(Icons.map_outlined),
+                    label: const Text('View on map'),
+                  ),
+                ],
+              ],
             ),
           ],
         ),

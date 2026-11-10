@@ -70,10 +70,29 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
         ..setLooping(false)
         ..addListener(_handleVideoUpdate);
 
-      // Start muted — every browser permits muted autoplay without
-      // user interaction. The video starts playing immediately and automatically.
-      await controller.setVolume(0);
-      await controller.play();
+      // Try unmuted playback first so sound plays automatically if permitted
+      // by the browser. If blocked by the browser autoplay policy, fall back
+      // to muted immediately so playback never freezes.
+      try {
+        await controller.setVolume(1.0);
+        await controller.play();
+        if (!mounted) return;
+        _loadingVideo = false;
+        setState(() {});
+
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        if (!mounted) return;
+        if (!controller.value.isPlaying) {
+          await controller.setVolume(0);
+          await controller.play();
+          setState(() {});
+        }
+      } catch (_) {
+        try {
+          await controller.setVolume(0);
+          await controller.play();
+        } catch (_) {}
+      }
       if (!mounted) return;
       _loadingVideo = false;
       setState(() {});
@@ -199,7 +218,14 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: _finish,
+        onTap: () {
+          final c = _controller;
+          if (c != null && c.value.isInitialized && c.value.volume == 0) {
+            c.setVolume(1.0);
+            return;
+          }
+          _finish();
+        },
         child: LayoutBuilder(
           builder: (context, outer) {
             // Fill the whole viewport. The clip is a portrait 9:16 video drawn

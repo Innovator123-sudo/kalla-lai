@@ -56,17 +56,11 @@ class _MainShellScreenState extends State<MainShellScreen> {
         // with the admin console as the primary tab and their own profile
         // as the secondary tab. Only non-staff users without a worker or
         // employer role see the manual mode switcher.
-        final lockedMode =
-            user?.isWorker == true
-                ? AppMode.vacancy
-                : user?.isEmployer == true
-                ? AppMode.hiring
-                : null;
         final isStaffOnly =
             user?.isStaff == true &&
             !user!.isWorker &&
             !user.isEmployer;
-        final mode = lockedMode ?? selectedMode;
+        final mode = isStaffOnly ? AppMode.vacancy : selectedMode;
         final isJobSearch = mode == AppMode.vacancy;
         final savedJobs = _savedJobsById.values.toList(growable: false);
         final appliedJobs = _appliedJobsById.values.toList(growable: false);
@@ -328,91 +322,42 @@ class _MainShellScreenState extends State<MainShellScreen> {
                             ],
                           ),
                         )
-                    : lockedMode != null
-                        ? Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: KallaLaiColors.indigo.withValues(
-                              alpha: 0.08,
+                    : SegmentedButton<AppMode>(
+                        showSelectedIcon: false,
+                        segments: [
+                          ButtonSegment(
+                            value: AppMode.vacancy,
+                            icon: const Icon(Icons.search),
+                            label: Text(
+                              strings.text('vacancy'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            borderRadius: BorderRadius.circular(14),
                           ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                isJobSearch
-                                    ? Icons.engineering_outlined
-                                    : Icons.business_center_outlined,
-                                size: 18,
-                                color: KallaLaiColors.indigo,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  isJobSearch
-                                      ? 'Worker account · finding vacancies'
-                                      : 'Employer account · hiring',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: KallaLaiColors.indigo,
-                                  ),
-                                ),
-                              ),
-                              const Tooltip(
-                                message:
-                                    'Your account type is fixed after sign-in',
-                                child: Icon(
-                                  Icons.lock_outline,
-                                  size: 16,
-                                  color: KallaLaiColors.muted,
-                                ),
-                              ),
-                            ],
+                          ButtonSegment(
+                            value: AppMode.hiring,
+                            icon: const Icon(Icons.business_center_outlined),
+                            label: Text(
+                              strings.text('hiring'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        )
-                        : SegmentedButton<AppMode>(
-                          showSelectedIcon: false,
-                          segments: [
-                            ButtonSegment(
-                              value: AppMode.vacancy,
-                              icon: const Icon(Icons.search),
-                              label: Text(
-                                strings.text('vacancy'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            ButtonSegment(
-                              value: AppMode.hiring,
-                              icon: const Icon(Icons.business_center_outlined),
-                              label: Text(
-                                strings.text('hiring'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                          selected: {mode},
-                          onSelectionChanged: (selection) {
-                            context.read<ModeSwitcherCubit>().select(
-                              selection.first,
-                            );
-                            setState(() => _selectedIndex = 0);
-                          },
-                        ),
+                        ],
+                        selected: {mode},
+                        onSelectionChanged: (selection) {
+                          final newMode = selection.first;
+                          context.read<ModeSwitcherCubit>().select(newMode);
+                          if (newMode == AppMode.vacancy) {
+                            context.read<VacancyDiscoveryCubit>().load();
+                          }
+                          setState(() => _selectedIndex = 0);
+                        },
+                      ),
               ),
             ),
           ),
-          body: Column(
-            children: [
-              const DemoBanner(),
-              Expanded(child: pages[_selectedIndex]),
-            ],
-          ),
+          body: pages[_selectedIndex],
           bottomNavigationBar: NavigationBar(
             selectedIndex: _selectedIndex,
             onDestinationSelected:
