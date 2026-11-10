@@ -61,6 +61,57 @@
       });
     })();
   </script>
+  <script>
+    // One-time cache reset for clients that still have the old Cloudflare
+    // tunnel build cached by Flutter's service worker. The retired URL is no
+    // longer compiled into the app; clearing the worker and its caches makes
+    // sure every browser fetches the current bundle after this deploy.
+    (function () {
+      if (['localhost', '127.0.0.1', '[::1]'].indexOf(location.hostname) !== -1) {
+        return;
+      }
+      var key = 'kalla_lai.web_cache_version';
+      var version = '2026-11-10-vercel-api';
+      var fresh = location.search.indexOf('fresh=1') !== -1;
+      try {
+        if (fresh) {
+          localStorage.setItem(key, version);
+          return;
+        }
+        if (localStorage.getItem(key) === version) return;
+      } catch (e) {
+        return;
+      }
+      var reload = function () {
+        if (location.search.indexOf('fresh=1') !== -1) return;
+        location.replace(location.pathname + '?fresh=1' + location.hash);
+      };
+      var jobs = [];
+      if ('serviceWorker' in navigator) {
+        jobs.push(
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(
+              regs.map(function (reg) { return reg.unregister(); })
+            );
+          })
+        );
+      }
+      if (window.caches) {
+        jobs.push(
+          caches.keys().then(function (keys) {
+            return Promise.all(
+              keys.map(function (name) { return caches.delete(name); })
+            );
+          })
+        );
+      }
+      var timer = setTimeout(reload, 1500);
+      Promise.all(jobs).catch(function () {}).then(function () {
+        clearTimeout(timer);
+        reload();
+      });
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

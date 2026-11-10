@@ -7,26 +7,20 @@ class AppSettingsState {
     required this.themeMode,
     required this.languageCode,
     required this.notificationsEnabled,
-    required this.apiUrlOverride,
   });
 
   final ThemeMode themeMode;
   final String languageCode;
   final bool notificationsEnabled;
 
-  /// Empty means "use the build/runtime default".
-  final String apiUrlOverride;
-
   AppSettingsState copyWith({
     ThemeMode? themeMode,
     String? languageCode,
     bool? notificationsEnabled,
-    String? apiUrlOverride,
   }) => AppSettingsState(
     themeMode: themeMode ?? this.themeMode,
     languageCode: languageCode ?? this.languageCode,
     notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
-    apiUrlOverride: apiUrlOverride ?? this.apiUrlOverride,
   );
 }
 
@@ -37,7 +31,6 @@ class AppSettingsCubit extends Cubit<AppSettingsState> {
   static const _themeKey = 'kalla_lai.theme_mode.v1';
   static const _languageKey = 'kalla_lai.language.v1';
   static const _notificationsKey = 'kalla_lai.notifications.v1';
-  static const _apiUrlKey = 'kalla_lai.api_url.v1';
 
   static AppSettingsState _read() => AppSettingsState(
     themeMode: switch (kvStore.read(_themeKey)) {
@@ -49,18 +42,14 @@ class AppSettingsCubit extends Cubit<AppSettingsState> {
     },
     languageCode: kvStore.read(_languageKey) == 'ne' ? 'ne' : 'en',
     notificationsEnabled: kvStore.read(_notificationsKey) != 'false',
-    apiUrlOverride: kvStore.read(_apiUrlKey) ?? '',
   );
 
   void setThemeMode(ThemeMode mode) {
-    kvStore.write(
-      _themeKey,
-      switch (mode) {
-        ThemeMode.light => 'light',
-        ThemeMode.dark => 'dark',
-        ThemeMode.system => 'system',
-      },
-    );
+    kvStore.write(_themeKey, switch (mode) {
+      ThemeMode.light => 'light',
+      ThemeMode.dark => 'dark',
+      ThemeMode.system => 'system',
+    });
     emit(state.copyWith(themeMode: mode));
   }
 
@@ -73,15 +62,5 @@ class AppSettingsCubit extends Cubit<AppSettingsState> {
   void setNotifications(bool enabled) {
     kvStore.write(_notificationsKey, enabled.toString());
     emit(state.copyWith(notificationsEnabled: enabled));
-  }
-
-  void setApiUrlOverride(String value) {
-    kvStore.write(_apiUrlKey, value.trim());
-    emit(state.copyWith(apiUrlOverride: value.trim()));
-  }
-
-  static String? get savedApiUrlOverride {
-    final value = kvStore.read(_apiUrlKey);
-    return (value == null || value.isEmpty) ? null : value;
   }
 }
