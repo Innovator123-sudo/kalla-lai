@@ -74,7 +74,15 @@ class _AuthGateState extends State<AuthGate> {
                 return const MainShellScreen();
               }
 
-              // Proceed directly to the sign-in / registration screen.
+              // First-run journey: the intro clip has already played, so the
+              // visitor picks a path, answers the short questions, and then
+              // signs in. Platform staff can reach the sign-in menu without
+              // answering them, and the answers are optional for everyone.
+              if (journey.staffLogin) return const LoginScreen();
+              if (journey.intent == null) {
+                return const IntentSelectionScreen();
+              }
+              if (!journey.surveyComplete) return const SurveyScreen();
               return const LoginScreen();
             },
           );

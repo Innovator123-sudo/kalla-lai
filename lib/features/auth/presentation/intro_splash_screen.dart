@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:kalla_lai/core/theme/kalla_lai_theme.dart';
 import 'package:kalla_lai/core/widgets/loading_animation.dart'
     show initializeIntroVideo;
 import 'package:video_player/video_player.dart';
@@ -13,6 +14,12 @@ import 'package:video_player/video_player.dart';
 /// `video_player` derives `isCompleted` from `position == duration`, which is
 /// also true for the first moments of a freshly created player (both are
 /// zero), so the clip's own end position is compared instead.
+///
+/// Playback starts muted, because every browser allows muted autoplay and
+/// refuses an unmuted start until the visitor has interacted with the page.
+/// The first tap turns the soundtrack on. If a browser refuses even the muted
+/// start, the frame shows a "Tap to play" button instead of an outline that
+/// never plays.
 class IntroSplashScreen extends StatefulWidget {
   const IntroSplashScreen({required this.onFinished, super.key});
 
@@ -23,15 +30,23 @@ class IntroSplashScreen extends StatefulWidget {
 }
 
 class _IntroSplashScreenState extends State<IntroSplashScreen> {
-  /// How long a freshly started clip gets to prove it is running.
-  static const Duration _startTimeout = Duration(milliseconds: 1500);
+  /// How often a freshly started clip is checked, and how many checks it gets,
+  /// before it counts as running.
+  ///
+  /// `play()` is not proof: on the web it resolves even when the browser
+  /// refuses to start playback (the rejection arrives as an error *event*, not
+  /// a thrown exception), and its `isPlaying` flag flips as soon as it is
+  /// called. Only real movement of the clip's own position confirms that frames
+  /// are being produced.
+  static const Duration _progressCheckEvery = Duration(milliseconds: 250);
+  static const int _progressChecks = 6;
 
   /// How close to the last frame counts as "the clip finished".
   static const Duration _endTolerance = Duration(milliseconds: 150);
 
-  /// Attempts on the *same* clip before the app takes over. Retrying the clip
-  /// keeps the intro identical; anything else would be a second, unintended
-  /// intro.
+  /// Attempts on the *same* clip before the frame asks for a tap. Retrying the
+  /// clip keeps the intro identical; anything else would be a second,
+  /// unintended intro.
   static const int _maxAttempts = 6;
 
   /// Growing pause before each retry (index 0 is the pause after attempt 1).
@@ -59,6 +74,15 @@ class _IntroSplashScreenState extends State<IntroSplashScreen> {
   VideoPlayerController? _controller;
   bool _finished = false;
   bool _starting = false;
+
+  /// True once the clip is running with its soundtrack.
+  bool _withSound = false;
+
+  /// True when every automatic start was refused, which is what a browser's
+  /// autoplay policy looks like from here. The frame then waits for the one
+  /// tap that unlocks playback instead of sitting empty.
+  bool _needsTap = false;
+
   int _attempts = 0;
   Timer? _watchdog;
 
@@ -72,7 +96,11 @@ class _IntroSplashScreenState extends State<IntroSplashScreen> {
   /// Starts the clip, retrying the same source when a start cannot be
   /// confirmed. Each attempt replaces the previous player, so a browser that
   /// killed the first one still gets the identical intro.
-  Future<void> _start() async {
+  ///
+  /// [withSound] is only true once a tap has unlocked playback; every
+  /// automatic attempt starts muted, because that is the one start browsers
+  /// allow without a gesture.
+  Future<void> _start({bool withSound = false}) async {
     if (_finished || _starting) return;
     _starting = true;
     _detachController();
@@ -99,41 +127,46 @@ class _IntroSplashScreenState extends State<IntroSplashScreen> {
       ..addListener(_handleVideoUpdate);
     if (mounted) setState(() {});
 
-    await _play(controller);
+    final running = await _startAndConfirm(controller, withSound: withSound);
     if (!mounted || _finished || !identical(_controller, controller)) return;
-
-    await Future<void>.delayed(_startTimeout);
-    if (!mounted || _finished || !identical(_controller, controller)) return;
-
-    // Confirmed only when the clip is genuinely running. `isPlaying` alone is
-    // enough to know the browser accepted the play() call, and a position that
-    // already moved proves frames are being produced.
-    final value = controller.value;
-    if (value.isPlaying || value.position > Duration.zero) {
-      _starting = false;
-      _attempts = 0;
-      if (mounted) setState(() {});
+    if (!running) {
+      _retryOrGiveUp();
       return;
     }
-    _retryOrGiveUp();
+
+    _starting = false;
+    _attempts = 0;
+    _needsTap = false;
+    _withSound = withSound;
+    if (mounted) setState(() {});
   }
 
-  Future<void> _play(VideoPlayerController controller) async {
+  /// Plays [controller] and reports whether it is really running.
+  ///
+  /// A muted start is used unless [withSound] says a tap already unlocked the
+  /// soundtrack: `setVolume(0)` also sets the element's `muted` attribute,
+  /// which is exactly what autoplay policies check.
+  Future<bool> _startAndConfirm(
+    VideoPlayerController controller, {
+    required bool withSound,
+  }) async {
     try {
-      // Preferred path: the intro clip starts with its soundtrack.
-      await controller.setVolume(1.0);
+      await controller.setVolume(withSound ? 1.0 : 0);
       await controller.play();
     } catch (_) {
-      // Browsers refuse unmuted autoplay until the visitor interacts, so fall
-      // back to muted playback and let the first tap or key press unmute it
-      // (the GestureDetector below and web/index.html both do that). Unmuting
-      // here instead would make Chrome pause the clip again and the intro
-      // would look like it failed to start.
-      try {
-        await controller.setVolume(0);
-        await controller.play();
-      } catch (_) {}
+      return false;
     }
+
+    for (var check = 0; check < _progressChecks; check++) {
+      await Future<void>.delayed(_progressCheckEvery);
+      if (!mounted || _finished || !identical(_controller, controller)) {
+        return false;
+      }
+      final value = controller.value;
+      if (value.hasError) return false;
+      if (value.position > Duration.zero) return true;
+    }
+    return false;
   }
 
   void _retryOrGiveUp() {
@@ -141,12 +174,14 @@ class _IntroSplashScreenState extends State<IntroSplashScreen> {
     if (_finished) return;
     _attempts++;
     if (_attempts >= _maxAttempts) {
-      // Every attempt failed. Hand over to the app rather than showing some
-      // other animation: the intro must only ever be the clip.
-      _finish();
+      // The clip stays on the frame and waits for the tap that unlocks
+      // playback; [_hardDeadline] still hands over to the app, so nobody is
+      // stranded on a still frame.
+      _needsTap = true;
+      if (mounted) setState(() {});
       return;
     }
-    unawaited(Future<void>.delayed(_retryDelay(_attempts), _start));
+    unawaited(Future<void>.delayed(_retryDelay(_attempts), () => _start()));
   }
 
   /// Pause to take before attempt number [attempt] (1-based).
@@ -200,13 +235,24 @@ class _IntroSplashScreenState extends State<IntroSplashScreen> {
   }
 
   /// The first tap anywhere is the browser's cue to unlock sound.
+  ///
+  /// On a frame that is waiting for a tap it also restarts the clip, this time
+  /// with its soundtrack, because the tap itself is the gesture the browser
+  /// was waiting for.
   void _unmute() {
+    if (_needsTap) {
+      _attempts = 0;
+      _needsTap = false;
+      unawaited(_start(withSound: true));
+      return;
+    }
     final controller = _controller;
-    if (controller == null) return;
+    if (controller == null || _withSound) return;
     controller.setVolume(1.0);
     if (!controller.value.isPlaying && !controller.value.isCompleted) {
       controller.play();
     }
+    setState(() => _withSound = true);
   }
 
   void _finish() {
@@ -229,6 +275,9 @@ class _IntroSplashScreenState extends State<IntroSplashScreen> {
   /// The frame keeps the clip's own aspect ratio and is held away from the
   /// page edges, so the clip's white borders no longer sit mid-screen where
   /// they read as a stray "dividing line" across the page.
+  ///
+  /// A frame that could not start playback shows a "Tap to play" button in the
+  /// same outline, so the visitor never reads an empty frame as a broken page.
   Widget _buildFrame({Size? videoSize}) {
     final size = (videoSize == null || videoSize.isEmpty)
         ? _fallbackVideoSize
@@ -247,16 +296,29 @@ class _IntroSplashScreenState extends State<IntroSplashScreen> {
                 border: Border.all(color: Colors.black, width: 2),
               ),
               child: ClipRect(
-                child: FittedBox(
-                  fit: BoxFit.contain,
-                  clipBehavior: Clip.hardEdge,
-                  child: SizedBox(
-                    width: size.width,
-                    height: size.height,
-                    child: controller == null
-                        ? const SizedBox.shrink()
-                        : VideoPlayer(controller),
-                  ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.contain,
+                      clipBehavior: Clip.hardEdge,
+                      child: SizedBox(
+                        width: size.width,
+                        height: size.height,
+                        child: controller == null
+                            ? const SizedBox.shrink()
+                            : VideoPlayer(controller),
+                      ),
+                    ),
+                    if (_needsTap)
+                      Center(
+                        child: FilledButton.icon(
+                          onPressed: _unmute,
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('Tap to play'),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -273,6 +335,7 @@ class _IntroSplashScreenState extends State<IntroSplashScreen> {
     if (controller != null && controller.value.isInitialized) {
       videoSize = controller.value.size;
     }
+    final showSoundHint = controller != null && !_withSound && !_needsTap;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -283,8 +346,52 @@ class _IntroSplashScreenState extends State<IntroSplashScreen> {
           color: Colors.white,
           width: double.infinity,
           height: double.infinity,
-          child: _buildFrame(videoSize: videoSize),
+          child: Stack(
+            children: [
+              _buildFrame(videoSize: videoSize),
+              if (showSoundHint)
+                const Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 18,
+                  child: Center(child: _SoundHint()),
+                ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Shown while the clip is playing muted, which is how browsers start
+/// autoplay. One tap anywhere turns the soundtrack on.
+class _SoundHint extends StatelessWidget {
+  const _SoundHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: KallaLaiColors.outline),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.volume_up_outlined, size: 16, color: KallaLaiColors.muted),
+          SizedBox(width: 6),
+          Text(
+            'Tap for sound',
+            style: TextStyle(
+              color: KallaLaiColors.muted,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
