@@ -46,8 +46,13 @@ abstract final class SessionStore {
     if (email.trim().isNotEmpty) kvStore.write(_emailKey, email.trim());
   }
 
+  /// Drops the session and the remembered side.
+  ///
+  /// Keeping `appMode` after a session ends lets one account's side leak into
+  /// the next account's profile setup on a shared device.
   static void clear() {
     kvStore.remove(_refreshKey);
     kvStore.remove(_accessKey);
+    kvStore.remove(_modeKey);
   }
 }

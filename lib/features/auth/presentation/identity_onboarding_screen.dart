@@ -34,6 +34,17 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
   bool get _usesInAppCheck =>
       _verificationMode == 'IN_APP' || _verificationMode == 'DEMO';
 
+  /// Which profile sheet this person must fill in.
+  ///
+  /// The account's roles win over the in-app mode, so a worker-only account is
+  /// never asked for employer details. Only accounts holding both roles fall
+  /// back to the side picked at sign-in.
+  bool _resolveIsHiring(SessionUser user, AppMode mode) {
+    if (user.isEmployer && !user.isWorker) return true;
+    if (user.isWorker && !user.isEmployer) return false;
+    return mode == AppMode.hiring;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -76,7 +87,10 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
       return;
     }
 
-    final isHiring = context.read<ModeSwitcherCubit>().state == AppMode.hiring;
+    final isHiring = _resolveIsHiring(
+      user,
+      context.read<ModeSwitcherCubit>().state,
+    );
     final profile = <String, dynamic>{
       'fullName': _name.text.trim(),
       'phone': _phone.text.trim(),
@@ -319,7 +333,10 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
   }
 
   Widget _heading(SessionUser user, bool onboardingComplete) {
-    final isHiring = context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
+    final isHiring = _resolveIsHiring(
+      user,
+      context.watch<ModeSwitcherCubit>().state,
+    );
     final title =
         onboardingComplete
             ? _verificationHeading(user.identityStatus)
@@ -425,7 +442,10 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
   }
 
   Widget _profileCard(SessionUser user) {
-    final isHiring = context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
+    final isHiring = _resolveIsHiring(
+      user,
+      context.watch<ModeSwitcherCubit>().state,
+    );
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
