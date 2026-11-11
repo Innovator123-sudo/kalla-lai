@@ -6,7 +6,6 @@ import 'package:kalla_lai/features/admin/presentation/admin_people_screen.dart';
 import 'package:kalla_lai/features/auth/application/auth_cubit.dart';
 import 'package:kalla_lai/features/auth/application/auth_state.dart';
 import 'package:kalla_lai/features/auth/presentation/identity_onboarding_screen.dart';
-import 'package:kalla_lai/features/discovery/application/vacancy_discovery_cubit.dart';
 import 'package:kalla_lai/features/discovery/presentation/vacancy_map_discovery_screen.dart';
 import 'package:kalla_lai/features/hiring/presentation/hiring_requisition_wizard_screen.dart';
 import 'package:kalla_lai/features/mode/application/mode_switcher_cubit.dart';

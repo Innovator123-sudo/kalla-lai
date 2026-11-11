@@ -5,7 +5,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart' as maps;
 import 'package:intl/intl.dart';
 import 'package:kalla_lai/core/config/app_config.dart';
 import 'package:kalla_lai/core/localization/app_strings.dart';
-import 'package:kalla_lai/core/maps/map_link.dart';
 import 'package:kalla_lai/core/theme/kalla_lai_theme.dart';
 import 'package:kalla_lai/core/widgets/loading_animation.dart';
 import 'package:kalla_lai/core/widgets/status_pill.dart';

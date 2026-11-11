@@ -50,7 +50,7 @@ flutter create --platforms=android,ios,web .
 flutter pub get
 ```
 
-The app opens with the supplied intro clip (`assets/videos/video_1083905.mp4`, 768×1344 portrait, 5.2 s, H.264 + AAC) centred on a white page inside a thin black frame, then hands over to the entry questions. Browsers refuse an unmuted autoplay, so the clip starts muted and the first tap turns the soundtrack on; if a browser refuses even the muted start, the frame shows a "Tap to play" button. `assets/videos/loading.webm` is the same clip re-encoded as VP9 + Opus and is the fallback for Chromium builds compiled without proprietary codecs. The supplied Kalla-Lai logo is packaged at `assets/images/kalla_lai_logo.png`.
+The app opens with the supplied intro clip (`assets/videos/video_1083905.mp4`, 768×1344 portrait, 5.2 s, H.264 + AAC) centred on a page of the clip's own background colour with no frame around it, then hands over to the entry questions. The clip is asked to play with sound as soon as it loads. Browsers refuse sound until the visitor has interacted with the page, so when that happens the clip plays silently and the soundtrack comes on at the first tap, click or key press; no prompt is shown. `assets/videos/loading.webm` is the same clip re-encoded as VP9 + Opus and is the fallback for Chromium builds compiled without proprietary codecs. The supplied Kalla-Lai logo is packaged at `assets/images/kalla_lai_logo.png`.
 
 The discovery screen uses a clearly labelled schematic map by default. To enable the Google Maps widget, configure the platform-specific Maps SDK keys outside source control, then run with `--dart-define=KALLALAI_MAPS_CONFIGURED=true`. Do not put keys in Dart source or commit platform secrets.
 

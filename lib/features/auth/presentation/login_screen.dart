@@ -5,6 +5,7 @@ import 'package:kalla_lai/core/storage/session_store.dart';
 import 'package:kalla_lai/core/theme/kalla_lai_theme.dart';
 import 'package:kalla_lai/features/auth/application/auth_cubit.dart';
 import 'package:kalla_lai/features/auth/application/auth_state.dart';
+import 'package:kalla_lai/features/auth/application/entry_journey_cubit.dart';
 import 'package:kalla_lai/features/mode/application/mode_switcher_cubit.dart';
 import 'package:kalla_lai/features/settings/presentation/settings_screen.dart';
 import 'package:kalla_lai/features/shared/domain/marketplace_models.dart';

@@ -10,8 +10,6 @@ import 'package:kalla_lai/features/discovery/application/vacancy_discovery_cubit
 import 'package:kalla_lai/features/hiring/application/hiring_requisition_cubit.dart';
 import 'package:kalla_lai/features/hiring/domain/job_catalog.dart';
 import 'package:kalla_lai/features/hiring/presentation/job_type_picker_screen.dart';
-import 'package:kalla_lai/features/mode/application/mode_switcher_cubit.dart';
-import 'package:kalla_lai/features/shared/domain/marketplace_models.dart';
 
 /// Question-style requisition wizard: one plain question per step, big tap
 /// targets, and an honest ending that states exactly where the data went.
