@@ -53,11 +53,23 @@ class _ProfileBodyState extends State<_ProfileBody> {
     final strings = AppStrings.of(context);
     final localeCubit = context.read<LocaleCubit>();
     final user = context.watch<AuthCubit>().state.user;
+    // The whole page follows the side picked at sign-in: heading, account
+    // chip, identity card and the customization form below.
+    final isHiring =
+        context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
+    final staffOnly =
+        user != null && user.isStaff && !user.isWorker && !user.isEmployer;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
       children: [
         Text(
-          strings.text('profile_title'),
+          strings.text(
+            staffOnly
+                ? 'profile'
+                : isHiring
+                ? 'hirer_profile_title'
+                : 'profile_title',
+          ),
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             color: KallaLaiColors.slate,
             fontWeight: FontWeight.w800,
@@ -113,11 +125,8 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   ),
                 );
               }
-              // Customization is strictly determined by the login selection:
-              // Hirer customization when in Hiring mode, Worker customization
-              // when in Worker mode. Both are never shown at the same time.
-              final isHiring =
-                  context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
+              // Hirer customization on the hiring side, worker customization
+              // on the worker side. Both are never shown at the same time.
               final editors = <Widget>[
                 if (isHiring)
                   _EmployerProfileEditor(state: state)
@@ -1445,6 +1454,8 @@ class _AccountCard extends StatelessWidget {
     final auth = context.watch<AuthCubit>().state;
     final user = auth.user;
     if (user == null) return const SizedBox.shrink();
+    final isHiring =
+        context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -1496,7 +1507,7 @@ class _AccountCard extends StatelessWidget {
               children: [
                 Chip(
                   avatar: const Icon(Icons.badge_outlined, size: 18),
-                  label: Text(user.roleLabel),
+                  label: Text(user.sideLabel(hiring: isHiring)),
                 ),
                 StatusPill(
                   label:
@@ -1535,7 +1546,11 @@ class _IdentityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthCubit>().state.user;
-    if (user == null || user.isDemoSession || !user.isWorker) {
+    // Only applying for jobs depends on this check, so it belongs to the
+    // worker side. A hirer sees their own trust status in the form below.
+    final isHiring =
+        context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
+    if (user == null || user.isDemoSession || !user.isWorker || isHiring) {
       return const SizedBox.shrink();
     }
     final status = user.identityStatus;

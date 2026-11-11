@@ -171,11 +171,11 @@ class _MainShellScreenState extends State<MainShellScreen> {
                               const SizedBox(height: 4),
                               Text(
                                 user.isDemoSession
-                                    ? '${user.roleLabel} · ${strings.text('demo_session')}'
-                                    : user.roleLabel,
+                                    ? '${user.sideLabel(hiring: !isJobSearch)} · ${strings.text('demo_session')}'
+                                    : user.sideLabel(hiring: !isJobSearch),
                                 style: Theme.of(context).textTheme.labelSmall,
                               ),
-                              if (user.isWorker)
+                              if (user.isWorker && isJobSearch)
                                 Text(
                                   user.identityStatus == 'VERIFIED'
                                       ? 'Identity verified'
@@ -208,6 +208,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                           const PopupMenuDivider(),
                         ],
                         if (user.isWorker &&
+                            isJobSearch &&
                             !user.isDemoSession &&
                             user.identityStatus != 'VERIFIED') ...[
                           const PopupMenuItem<_AccountAction>(

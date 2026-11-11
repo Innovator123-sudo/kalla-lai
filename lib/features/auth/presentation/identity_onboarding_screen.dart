@@ -186,10 +186,16 @@ class _IdentityOnboardingScreenState extends State<IdentityOnboardingScreen> {
       appBar: AppBar(
         title: Text(onboardingComplete ? 'Identity check' : 'Your profile'),
         actions: [
-          IconButton(
-            tooltip: 'Sign out',
-            onPressed: auth.busy ? null : authCubit.signOut,
-            icon: const Icon(Icons.logout),
+          // Always available, even while a request is in flight, so nobody is
+          // trapped on this step: it signs out and returns to the sign-in menu.
+          TextButton.icon(
+            onPressed: authCubit.signOut,
+            icon: const Icon(Icons.close),
+            label: Text(
+              onboardingComplete || Navigator.of(context).canPop()
+                  ? 'Sign out'
+                  : 'Cancel',
+            ),
           ),
           const SizedBox(width: 8),
         ],

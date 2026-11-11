@@ -108,6 +108,12 @@ class FirebaseGoogleIdentityProvider implements GoogleIdentityProvider {
       }
       return GoogleIdentityToken(idToken: idToken);
     } on FirebaseAuthException catch (error) {
+      if (_cancelCodes.contains(error.code)) {
+        throw const ApiException(
+          'Google sign-in was cancelled.',
+          code: googleSignInCancelledCode,
+        );
+      }
       throw ApiException(
         _errorMessage(error.code),
         code: error.code,
@@ -122,7 +128,10 @@ class FirebaseGoogleIdentityProvider implements GoogleIdentityProvider {
         cancelled
             ? 'Google sign-in was cancelled.'
             : 'Google sign-in failed. Check the Firebase OAuth configuration.',
-        code: 'GOOGLE_SIGN_IN_${error.code.name.toUpperCase()}',
+        code:
+            cancelled
+                ? googleSignInCancelledCode
+                : 'GOOGLE_SIGN_IN_${error.code.name.toUpperCase()}',
       );
     }
   }
@@ -133,12 +142,23 @@ class FirebaseGoogleIdentityProvider implements GoogleIdentityProvider {
     if (!kIsWeb) await _googleSignIn.signOut();
   }
 
+  /// Firebase codes for "the person closed or abandoned the Google window".
+  static const Set<String> _cancelCodes = <String>{
+    'popup-closed-by-user',
+    'cancelled-popup-request',
+    'user-cancelled',
+    'web-context-cancelled',
+    'web-context-canceled',
+  };
+
   String _errorMessage(String code) => switch (code) {
     'account-exists-with-different-credential' =>
       'This email already uses another sign-in method. Sign in with that method first.',
     'network-request-failed' =>
       'Could not reach Firebase. Check your connection and try again.',
-    'popup-closed-by-user' => 'Google sign-in was cancelled.',
+    'popup-blocked' =>
+      'Your browser blocked the Google sign-in window. Allow pop-ups for this '
+      'site and try again.',
     'unauthorized-domain' =>
       'This website domain is not authorised for Google sign-in yet. Add the '
       'site domain under Firebase Authentication > Settings > Authorized '

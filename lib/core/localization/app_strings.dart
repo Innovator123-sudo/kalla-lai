@@ -31,6 +31,8 @@ class AppStrings {
       'english': 'English',
       'nepali': 'नेपाली',
       'profile_title': 'Worker profile',
+      'hirer_profile_title': 'Hirer profile',
+      'cancel': 'Cancel',
       'shift_title': 'Shift & payment status',
       'hiring_title': 'Post work',
       'hiring_intro':
@@ -77,6 +79,8 @@ class AppStrings {
       'english': 'English',
       'nepali': 'नेपाली',
       'profile_title': 'कामदार प्रोफाइल',
+      'hirer_profile_title': 'रोजगारदाता प्रोफाइल',
+      'cancel': 'रद्द गर्नुहोस्',
       'shift_title': 'सिफ्ट र भुक्तानी स्थिति',
       'hiring_title': 'काम पोस्ट गर्नुहोस्',
       'hiring_intro': 'चार छोटा प्रश्न। पठाउनु अघि सबै कुरा बदल्न सक्नुहुन्छ।',

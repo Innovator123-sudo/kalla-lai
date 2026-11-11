@@ -24,10 +24,10 @@ class ModeSwitcherCubit extends Cubit<AppMode> {
     emit(mode);
   }
 
-  /// Aligns the active side with the account's real roles only if no explicit
-  /// login choice was made. The choice made at sign-in always takes priority.
+  /// Called once the API has said which roles the account really holds. An
+  /// account with one side is locked to it, whatever was picked on the sign-in
+  /// screen; an account with both keeps the side picked at sign-in.
   void applyAccount({required bool isWorker, required bool isEmployer}) {
-    if (SessionStore.appMode != null) return;
     if (isWorker && !isEmployer) {
       select(AppMode.vacancy);
     } else if (isEmployer && !isWorker) {

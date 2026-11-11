@@ -344,6 +344,12 @@ class _LoginCardState extends State<_LoginCard> {
                                       color: KallaLaiColors.slate,
                                     ),
                                   ),
+                                  const SizedBox(height: 10),
+                                  TextButton(
+                                    onPressed:
+                                        context.read<AuthCubit>().cancelSignIn,
+                                    child: Text(strings.text('cancel')),
+                                  ),
                                 ],
                               ),
                             ),

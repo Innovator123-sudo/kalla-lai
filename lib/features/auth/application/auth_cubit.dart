@@ -8,6 +8,10 @@ class AuthCubit extends Cubit<AuthState> {
 
   final AuthGateway _gateway;
 
+  /// Identifies the sign-in currently in flight. Cancelling or signing out
+  /// moves it on, so a late answer from an abandoned attempt is ignored.
+  int _attempt = 0;
+
   /// Silently rebuilds the previous session from local storage. Called after
   /// the first frame so a slow or blocked API can never stop the app loading.
   Future<void> restoreSession() async {
@@ -103,26 +107,48 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
+  /// Abandons the sign-in in flight and returns to the form. The Google window
+  /// can stay open or never report back, so this must not wait for it.
+  void cancelSignIn() {
+    if (!state.busy || state.status == AuthStatus.signedIn) return;
+    _attempt++;
+    emit(state.copyWith(busy: false, clearError: true));
+  }
+
   Future<void> signOut() async {
+    _attempt++;
     await _gateway.signOut();
     if (isClosed) return;
     emit(const AuthState());
   }
 
   Future<void> _run(Future<SessionUser> Function() action) async {
+    final attempt = ++_attempt;
     emit(state.copyWith(busy: true, clearError: true));
 
     try {
       final user = await action();
       if (isClosed) return;
+      if (attempt != _attempt) {
+        // Cancelled while it was in flight: drop the session it just created
+        // so a reload cannot sign the person in behind their back.
+        if (state.status != AuthStatus.signedIn && !state.busy) {
+          await _gateway.signOut();
+        }
+        return;
+      }
 
       emit(AuthState(status: AuthStatus.signedIn, user: user));
     } on ApiException catch (error) {
-      if (isClosed) return;
+      if (isClosed || attempt != _attempt) return;
 
+      if (error.code == googleSignInCancelledCode) {
+        emit(state.copyWith(busy: false, clearError: true));
+        return;
+      }
       emit(state.copyWith(busy: false, errorMessage: error.message));
     } catch (_) {
-      if (isClosed) return;
+      if (isClosed || attempt != _attempt) return;
 
       emit(
         state.copyWith(
@@ -141,9 +167,16 @@ class AuthCubit extends Cubit<AuthState> {
 
     emit(state.copyWith(busy: true, clearError: true));
 
+    // Signing out (or cancelling the profile step) while this is in flight
+    // must win: a late answer may not touch the signed-out state.
+    bool stale() =>
+        isClosed ||
+        state.status != AuthStatus.signedIn ||
+        state.user?.id != user.id;
+
     try {
       final result = await action();
-      if (isClosed) return result;
+      if (stale()) return result;
 
       emit(
         state.copyWith(
@@ -158,11 +191,11 @@ class AuthCubit extends Cubit<AuthState> {
 
       return result;
     } on ApiException catch (error) {
-      if (isClosed) return null;
+      if (stale()) return null;
 
       emit(state.copyWith(busy: false, errorMessage: error.message));
     } catch (_) {
-      if (isClosed) return null;
+      if (stale()) return null;
 
       emit(
         state.copyWith(

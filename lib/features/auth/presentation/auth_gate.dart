@@ -26,77 +26,91 @@ class _AuthGateState extends State<AuthGate> {
   bool _introFinished = false;
 
   @override
+  void initState() {
+    super.initState();
+    _lockSide(context.read<AuthCubit>().state);
+  }
+
+  /// The side is chosen at sign-in. Accounts with a single role are locked to
+  /// it; dual-role accounts keep the login choice.
+  void _lockSide(AuthState auth) {
+    final user = auth.user;
+    if (auth.status != AuthStatus.signedIn || user == null) return;
+    context.read<ModeSwitcherCubit>().applyAccount(
+      isWorker: user.isWorker,
+      isEmployer: user.isEmployer,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (!_introFinished) {
-      return IntroSplashScreen(
-        onFinished: () {
-          if (mounted) setState(() => _introFinished = true);
-        },
-      );
-    }
+    // Listens from the first frame: a saved session is restored while the
+    // intro clip is still playing, and that sign-in must lock the side too.
     return BlocListener<AuthCubit, AuthState>(
       listenWhen: (previous, current) => previous.status != current.status,
       listener: (context, auth) {
         final journey = context.read<EntryJourneyCubit>();
         if (auth.status == AuthStatus.signedIn) {
           journey.syncSurvey();
-          final user = auth.user;
-          if (user != null) {
-            // The side is chosen at sign-in. Accounts with a single role are
-            // locked to it; dual-role accounts keep the login choice.
-            context.read<ModeSwitcherCubit>().applyAccount(
-              isWorker: user.isWorker,
-              isEmployer: user.isEmployer,
-            );
-          }
+          _lockSide(auth);
         } else {
           journey.resetForSignOut();
         }
       },
-      child: BlocBuilder<EntryJourneyCubit, EntryJourneyState>(
-        builder: (context, journey) {
-          return BlocBuilder<AuthCubit, AuthState>(
-            builder: (context, auth) {
-              if (auth.status == AuthStatus.signedIn) {
-                final user = auth.user;
-                if (user == null) return const LoginScreen();
+      child: _introFinished ? _journey() : _intro(),
+    );
+  }
 
-                final gatedAccount =
-                    !user.isDemoSession && (user.isWorker || user.isEmployer);
-                if (gatedAccount && !user.onboardingComplete) {
-                  return const IdentityOnboardingScreen();
-                }
+  Widget _intro() => IntroSplashScreen(
+    onFinished: () {
+      if (mounted) setState(() => _introFinished = true);
+    },
+  );
 
-                // Workers can choose "Skip for now" and browse the app, but
-                // the API still refuses applications until identity is
-                // VERIFIED. Employers can verify from their profile later.
-                final isHiring =
-                    context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
-                final workerNeedsIdentity =
-                    !user.isDemoSession &&
-                    !isHiring &&
-                    user.identityStatus != 'VERIFIED' &&
-                    !journey.identitySkipped;
-                if (workerNeedsIdentity) {
-                  return const IdentityOnboardingScreen();
-                }
-                return const MainShellScreen();
+  Widget _journey() {
+    return BlocBuilder<EntryJourneyCubit, EntryJourneyState>(
+      builder: (context, journey) {
+        return BlocBuilder<AuthCubit, AuthState>(
+          builder: (context, auth) {
+            if (auth.status == AuthStatus.signedIn) {
+              final user = auth.user;
+              if (user == null) return const LoginScreen();
+
+              final gatedAccount =
+                  !user.isDemoSession && (user.isWorker || user.isEmployer);
+              if (gatedAccount && !user.onboardingComplete) {
+                return const IdentityOnboardingScreen();
               }
 
-              // First-run journey: the intro clip has already played, so the
-              // visitor picks a path, answers the short questions, and then
-              // signs in. Platform staff can reach the sign-in menu without
-              // answering them, and the answers are optional for everyone.
-              if (journey.staffLogin) return const LoginScreen();
-              if (journey.intent == null) {
-                return const IntentSelectionScreen();
+              // Workers can choose "Skip for now" and browse the app, but
+              // the API still refuses applications until identity is
+              // VERIFIED. Employers can verify from their profile later.
+              final isHiring =
+                  context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
+              final workerNeedsIdentity =
+                  !user.isDemoSession &&
+                  !isHiring &&
+                  user.identityStatus != 'VERIFIED' &&
+                  !journey.identitySkipped;
+              if (workerNeedsIdentity) {
+                return const IdentityOnboardingScreen();
               }
-              if (!journey.surveyComplete) return const SurveyScreen();
-              return const LoginScreen();
-            },
-          );
-        },
-      ),
+              return const MainShellScreen();
+            }
+
+            // First-run journey: the intro clip has already played, so the
+            // visitor picks a path, answers the short questions, and then
+            // signs in. Platform staff can reach the sign-in menu without
+            // answering them, and the answers are optional for everyone.
+            if (journey.staffLogin) return const LoginScreen();
+            if (journey.intent == null) {
+              return const IntentSelectionScreen();
+            }
+            if (!journey.surveyComplete) return const SurveyScreen();
+            return const LoginScreen();
+          },
+        );
+      },
     );
   }
 }

@@ -38,6 +38,10 @@ class IdentityFlowResult {
   final Map<String, dynamic>? verification;
 }
 
+/// Error code for a Google sign-in the person backed out of (closed the account
+/// chooser, pressed Cancel). It is not a failure and shows no error.
+const String googleSignInCancelledCode = 'GOOGLE_SIGN_IN_CANCELLED';
+
 abstract interface class GoogleIdentityProvider {
   Future<GoogleIdentityToken?> signIn();
 
@@ -188,7 +192,7 @@ class ApiAuthGateway implements AuthGateway {
     if (identity == null) {
       throw const ApiException(
         'Google sign-in was cancelled.',
-        code: 'GOOGLE_SIGN_IN_CANCELLED',
+        code: googleSignInCancelledCode,
       );
     }
     final json = await _client.postJson(

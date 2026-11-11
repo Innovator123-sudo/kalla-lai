@@ -56,6 +56,14 @@ class SessionUser extends Equatable {
     return 'Member';
   }
 
+  /// What to call this account on screen. Staff keep their staff title;
+  /// everyone else is named after the side they signed in on, because an
+  /// account can hold both the worker and the employer role.
+  String sideLabel({required bool hiring}) {
+    if (isStaff) return roleLabel;
+    return hiring ? 'Hirer' : 'Worker';
+  }
+
   @override
   List<Object?> get props => [
     id,
