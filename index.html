@@ -4,13 +4,13 @@
   <base href="/kalla-lai/">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="A trusted work marketplace connecting verified workers with employers across Nepal.">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="kalla_lai">
+  <meta name="apple-mobile-web-app-title" content="Kalla-Lai">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
   <link rel="icon" type="image/png" href="favicon.png"/>
-  <title>kalla_lai</title>
+  <title>कल्ला-लाई</title>
   <link rel="manifest" href="manifest.json">
   <style>
     html, body {
@@ -30,15 +30,19 @@
       function prepare(v) {
         if (!v || seen.has(v)) return;
         seen.add(v);
-        v.muted = true;
-        v.defaultMuted = true;
         v.playsInline = true;
-        v.setAttribute('muted', '');
         v.setAttribute('playsinline', '');
         var play = function () {
           if (!v.paused) return;
           var p = v.play();
-          if (p && p.catch) p.catch(function () {});
+          if (p && p.catch) {
+            p.catch(function () {
+              // Browser blocked unmuted autoplay: fall back to muted
+              v.muted = true;
+              v.setAttribute('muted', '');
+              v.play().catch(function () {});
+            });
+          }
         };
         play();
         v.addEventListener('loadeddata', play, { once: true });
@@ -58,6 +62,69 @@
         document.addEventListener(evt, function () {
           document.querySelectorAll('video').forEach(function (v) { v.muted = false; });
         }, { once: true, capture: true });
+      });
+    })();
+  </script>
+  <script>
+    // Cache reset for clients that still have the old Cloudflare tunnel build
+    // cached by Flutter's service worker. The retired URL is no longer compiled
+    // into the app; clearing the worker, its caches, and the old override key
+    // makes sure every browser fetches the current bundle after this deploy.
+    //
+    // A client whose old worker cached index.html will not see this script
+    // until the worker updates. Opening the page once with `?fresh=1` bypasses
+    // that cache (different query string) and lets this cleanup run.
+    (function () {
+      if (['localhost', '127.0.0.1', '[::1]'].indexOf(location.hostname) !== -1) {
+        return;
+      }
+      var key = 'kalla_lai.web_cache_version';
+      var version = '2026-11-11-intro-autoplay-1';
+      var fresh = location.search.indexOf('fresh=1') !== -1;
+      try {
+        // The old build let users save an API URL in local storage. Nothing
+        // reads it now, but delete it so a stale value cannot linger.
+        localStorage.removeItem('kalla_lai.api_url.v1');
+        if (localStorage.getItem(key) === version) return;
+      } catch (e) {
+        // Storage is unavailable (private mode, blocked cookies). Loading the
+        // current bundle is still possible, so keep going.
+      }
+      var finish = function () {
+        try {
+          localStorage.setItem(key, version);
+        } catch (e) {
+          // Ignore storage failures.
+        }
+        if (!fresh) {
+          location.replace(location.pathname + '?fresh=1' + location.hash);
+        }
+        // When the URL already has `?fresh=1` there is no second navigation:
+        // the caches are empty now, so the browser fetches the new bundle.
+      };
+      var jobs = [];
+      if ('serviceWorker' in navigator) {
+        jobs.push(
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(
+              regs.map(function (reg) { return reg.unregister(); })
+            );
+          })
+        );
+      }
+      if (window.caches) {
+        jobs.push(
+          caches.keys().then(function (keys) {
+            return Promise.all(
+              keys.map(function (name) { return caches.delete(name); })
+            );
+          })
+        );
+      }
+      var timer = setTimeout(finish, 2500);
+      Promise.all(jobs).catch(function () {}).then(function () {
+        clearTimeout(timer);
+        finish();
       });
     })();
   </script>
