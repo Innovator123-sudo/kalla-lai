@@ -63,7 +63,8 @@ class _LoginCardState extends State<_LoginCard> {
   @override
   void initState() {
     super.initState();
-    _asEmployer = false;
+    final intent = context.read<EntryJourneyCubit>().state.intent;
+    _asEmployer = intent == EntryIntent.employer;
   }
 
   @override

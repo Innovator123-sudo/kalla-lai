@@ -706,16 +706,10 @@ class _SubmittedView extends StatelessWidget {
                     label: const Text('Retry publishing'),
                   ),
                 if (published)
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      // Switching the cubit directly bypasses the shell's
-                      // segmented-button handler, so refresh discovery here.
-                      context.read<VacancyDiscoveryCubit>().load();
-                      context.read<ModeSwitcherCubit>().select(AppMode.vacancy);
-                      cubit.startAnother();
-                    },
-                    icon: const Icon(Icons.map_outlined),
-                    label: const Text('View on map'),
+                  FilledButton.icon(
+                    onPressed: () => cubit.startAnother(),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Post another shift'),
                   ),
               ],
             ),

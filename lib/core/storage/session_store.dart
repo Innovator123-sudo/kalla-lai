@@ -10,10 +10,22 @@ abstract final class SessionStore {
   static const _refreshKey = 'kalla_lai.refresh_token.v1';
   static const _accessKey = 'kalla_lai.access_token.v1';
   static const _emailKey = 'kalla_lai.remembered_email.v1';
+  static const _modeKey = 'kalla_lai.app_mode.v1';
 
   static String? get refreshToken => kvStore.read(_refreshKey);
   static String? get accessToken => kvStore.read(_accessKey);
   static String? get rememberedEmail => kvStore.read(_emailKey);
+
+  /// The side chosen at sign-in (`vacancy` or `hiring`). The choice is fixed
+  /// after login, so it is remembered across restarts instead of being
+  /// switchable from the profile.
+  static String? get appMode => kvStore.read(_modeKey);
+
+  static void saveAppMode(String mode) {
+    if (mode == 'vacancy' || mode == 'hiring') kvStore.write(_modeKey, mode);
+  }
+
+  static void clearAppMode() => kvStore.remove(_modeKey);
 
   static void save({
     required String refreshToken,

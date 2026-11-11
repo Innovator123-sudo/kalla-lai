@@ -40,6 +40,15 @@ class _AuthGateState extends State<AuthGate> {
         final journey = context.read<EntryJourneyCubit>();
         if (auth.status == AuthStatus.signedIn) {
           journey.syncSurvey();
+          final user = auth.user;
+          if (user != null) {
+            // The side is chosen at sign-in. Accounts with a single role are
+            // locked to it; dual-role accounts keep the login choice.
+            context.read<ModeSwitcherCubit>().applyAccount(
+              isWorker: user.isWorker,
+              isEmployer: user.isEmployer,
+            );
+          }
         } else {
           journey.resetForSignOut();
         }

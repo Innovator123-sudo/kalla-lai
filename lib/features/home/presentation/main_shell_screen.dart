@@ -45,10 +45,9 @@ class _MainShellScreenState extends State<MainShellScreen> {
         (user.isDemoSession || user.identityStatus == 'VERIFIED');
     return BlocBuilder<ModeSwitcherCubit, AppMode>(
       builder: (context, selectedMode) {
-        // The mode switcher is a view choice, not an authorization boundary:
-        // both workers and hirers can switch sides at any time. The API still
-        // enforces EMPLOYER / WORKER on every protected endpoint. Staff-only
-        // accounts (no worker or employer role) get the admin layout.
+        // The side is chosen during sign-in and never changes afterwards. The
+        // API still enforces EMPLOYER / WORKER on every protected endpoint.
+        // Staff-only accounts (no worker or employer role) get the admin layout.
         final isStaffOnly =
             user?.isStaff == true &&
             !user!.isWorker &&
@@ -277,78 +276,44 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 ),
               ),
             ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(54),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child:
-                    isStaffOnly
-                        ? Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: KallaLaiColors.indigo.withValues(
-                              alpha: 0.08,
+            bottom: isStaffOnly
+                ? PreferredSize(
+                    preferredSize: const Size.fromHeight(54),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: KallaLaiColors.indigo.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.admin_panel_settings_outlined,
+                              size: 18,
+                              color: KallaLaiColors.indigo,
                             ),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(
-                                Icons.admin_panel_settings_outlined,
-                                size: 18,
-                                color: KallaLaiColors.indigo,
-                              ),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Admin account · manage people and profiles',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: KallaLaiColors.indigo,
-                                  ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Admin account · manage people and profiles',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: KallaLaiColors.indigo,
                                 ),
                               ),
-                            ],
-                          ),
-                        )
-                    : SegmentedButton<AppMode>(
-                        showSelectedIcon: false,
-                        segments: [
-                          ButtonSegment(
-                            value: AppMode.vacancy,
-                            icon: const Icon(Icons.search),
-                            label: Text(
-                              strings.text('vacancy'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          ButtonSegment(
-                            value: AppMode.hiring,
-                            icon: const Icon(Icons.business_center_outlined),
-                            label: Text(
-                              strings.text('hiring'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                        selected: {mode},
-                        onSelectionChanged: (selection) {
-                          final newMode = selection.first;
-                          context.read<ModeSwitcherCubit>().select(newMode);
-                          if (newMode == AppMode.vacancy) {
-                            context.read<VacancyDiscoveryCubit>().load();
-                          }
-                          setState(() => _selectedIndex = 0);
-                        },
+                          ],
+                        ),
                       ),
-              ),
-            ),
+                    ),
+                  )
+                : null,
           ),
           body: pages[_selectedIndex],
           bottomNavigationBar: NavigationBar(

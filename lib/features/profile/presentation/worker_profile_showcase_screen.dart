@@ -10,7 +10,9 @@ import 'package:kalla_lai/core/widgets/loading_animation.dart';
 import 'package:kalla_lai/core/widgets/status_pill.dart';
 import 'package:kalla_lai/features/auth/application/auth_cubit.dart';
 import 'package:kalla_lai/features/auth/presentation/identity_onboarding_screen.dart';
+import 'package:kalla_lai/features/mode/application/mode_switcher_cubit.dart';
 import 'package:kalla_lai/features/profile/application/profile_cubit.dart';
+import 'package:kalla_lai/features/shared/domain/marketplace_models.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class WorkerProfileShowcaseScreen extends StatelessWidget {
@@ -111,17 +113,17 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   ),
                 );
               }
-              // Build a list of profile editors relevant to this account.
-              // Workers see the worker editor, employers see the employer
-              // editor, and staff see whichever profile sheets they have
-              // (or a prompt to create one).
-              final editors = <Widget>[];
-              if (user?.isWorker == true || (user?.isStaff == true && state.worker != null)) {
-                editors.add(_WorkerProfileEditor(state: state));
-              }
-              if (user?.isEmployer == true || (user?.isStaff == true && state.employer != null)) {
-                editors.add(_EmployerProfileEditor(state: state));
-              }
+              // Customization is strictly determined by the login selection:
+              // Hirer customization when in Hiring mode, Worker customization
+              // when in Worker mode. Both are never shown at the same time.
+              final isHiring =
+                  context.watch<ModeSwitcherCubit>().state == AppMode.hiring;
+              final editors = <Widget>[
+                if (isHiring)
+                  _EmployerProfileEditor(state: state)
+                else
+                  _WorkerProfileEditor(state: state),
+              ];
               if (editors.isEmpty && user?.isStaff == true) {
                 editors.add(
                   Card(
