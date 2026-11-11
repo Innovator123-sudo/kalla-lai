@@ -3,3 +3,4 @@
 
 ALTER TABLE jobs
   ADD COLUMN IF NOT EXISTS google_maps_link TEXT;
+

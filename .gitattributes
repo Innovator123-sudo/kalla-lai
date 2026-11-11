@@ -1,0 +1,19 @@
+# Pin LF for the hand-maintained pages that remain under site/ (the privacy
+# notice and the terms) so a Windows checkout produces a byte-identical tree to
+# the Linux CI checkout and to the committed blobs.
+site/**             text eol=lf
+
+# ...but never for binaries. PNG data legitimately contains 0D 0A byte pairs;
+# treating these as text makes git "normalise" the bytes, which both corrupts
+# the images and leaves every clean checkout showing them as modified.
+site/**/*.png       binary
+site/**/*.jpg       binary
+site/**/*.jpeg      binary
+site/**/*.gif       binary
+site/**/*.webp      binary
+site/**/*.ico       binary
+site/**/*.avif      binary
+site/**/*.mp4       binary
+site/**/*.webm       binary
+site/**/*.woff      binary
+site/**/*.woff2     binary

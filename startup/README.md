@@ -31,34 +31,36 @@ The technical side is already documented in depth:
 
 ## Founder setup checklist
 
-Work through these in order. Items 1–6 are the ones that currently make the website's contact flow and legal pages "drafts" rather than finished.
+Work through these in order. Items 1–6 are the ones that currently make the launch materials and legal pages "drafts" rather than finished.
 
 - [ ] **1. Legal entity** — register the company, get a tax ID and a business bank account. **[FOUNDER INPUT]**
-- [ ] **2. Real inbox** — set up `hello@<your-domain>` and replace the GitHub-issue contact flow in `site/contact.html` (regenerate via `python tools/build_site.py`). **[FOUNDER INPUT]**
-- [ ] **3. Domain** — point a real domain at the GitHub Pages site; update `og:url`, `sitemap.xml`, `robots.txt` and the JSON-LD block in `tools/build_site.py`.
+- [ ] **2. Real inbox** — set up `hello@<your-domain>` and surface it in the app's help screen. **[FOUNDER INPUT]**
+- [ ] **3. Domain** — point a real domain at the GitHub Pages site; update the canonical/`og:url` values in `site/privacy.html` and `site/terms.html`, plus `robots.txt` in the Pages workflow.
 - [ ] **4. Legal review** — have a lawyer in the launch jurisdiction review `site/privacy.html` and `site/terms.html`, plus the KYC consent flow. Remove the "draft" banners only after sign-off.
 - [ ] **5. Payment partner** — sign with a licensed provider, implement webhook-confirmed settlement, then update every page that says the product does not move money yet.
 - [ ] **6. Production secrets** — rotate the JWT/webhook secrets, lock down CORS to the production origins, move Firebase/Veriff credentials into a secret manager, set `DEMO_MODE=false`.
 - [ ] **7. Pilot** — recruit 3–5 employers with recurring shift demand and instrument the [pilot dashboard](METRICS.md#pilot-dashboard).
-- [ ] **8. Measure** — publish real retention, completion and repeat-hire numbers; replace the qualitative claims in `investors.html`.
-- [ ] **9. Team page** — add real names, roles and photos to `about.html`.
+- [ ] **8. Measure** — publish real retention, completion and repeat-hire numbers; replace the qualitative claims in this kit.
+- [ ] **9. Team** — add real names, roles and photos here and in the app's about screen.
 - [ ] **10. Decide licensing** — choose open-source vs proprietary for the codebase and add a `LICENSE` file. Currently the repository has **no license file**, which means default "all rights reserved" applies.
 
-## Regenerating the website
+## Publishing the site
+
+The Pages site is the Flutter app. `.github/workflows/deploy-pages.yml` builds it with
+`flutter build web --release --base-href /kalla-lai/` and publishes the result to the
+repository root, so opening the site launches the app directly. The marketing pages (home,
+pitch, roadmap, trust, FAQ, contact, about, investors) have been removed; `site/` now holds
+only `privacy.html`, `terms.html` and the assets those two pages use, which the workflow
+copies alongside the app. Old `/app/` links redirect to the root.
+
+For a local preview of the built app:
 
 ```powershell
-python tools/build_site.py
-```
-
-The generator writes 11 static HTML pages plus `robots.txt`, `sitemap.xml` and `.nojekyll` into `site/`. It uses relative paths so the site works under the `/kalla-lai/` subpath on GitHub Pages and also from a plain local static server.
-
-For a local preview that mirrors the Pages subpath:
-
-```powershell
-python -m http.server 8000 --directory site
-# then open http://localhost:8000/index.html
+flutter build web --release --base-href /kalla-lai/
+python -m http.server 8000 --directory build/web
+# then open http://localhost:8000/
 ```
 
 ## Deploy
 
-`.github/workflows/deploy-pages.yml` publishes the `site/` directory (including the built Flutter app under `site/app/`) on every push to `master`. No CI build step is required — the site is plain static files, which keeps deployments fast and deterministic.
+Every push to `master` runs that workflow; there is no separate release step.

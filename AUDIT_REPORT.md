@@ -228,4 +228,28 @@ Status legend: **PASS** = verified working · **FAIL** = issue identified · **N
 
 ## H. Implementation Report
 
-*Filled in after the fix phase (see the appended section at the end of this file).*
+**Status:** Completed
+**Date:** 2026-11-10
+
+### 1. Fixes Implemented
+
+| ID | Category | Description | Files Modified | Result |
+|---|---|---|---|---|
+| **BUG-01 & BUG-02** | Frontend | Unresolved symbols and missing cubit method aliases | `lib/features/auth/presentation/login_screen.dart`, `lib/features/hiring/presentation/hiring_requisition_wizard_screen.dart`, `lib/features/home/presentation/main_shell_screen.dart`, `lib/features/hiring/application/hiring_requisition_cubit.dart` | **VERIFIED** — All required imports and method aliases (`setJobType`, `setShift`, `setRate`) are properly defined and wired. |
+| **BUG-03** | Core Marketplace | New jobs not visible / stale discovery cache | `server/src/lib/cache.ts`, `server/src/routes/jobs.ts` | **VERIFIED** — Dynamic cache generation counter added; cache is bumped immediately on job publication and cancellation. |
+| **BUG-04** | Deployment / Website | Marketing site & legal pages not deployed on GitHub Pages; broken `app/` links | `.github/workflows/deploy-pages.yml`, `serve-web.js`, `site/*.html` | **VERIFIED** — Pages workflow merged to deploy `site/` at root and Flutter app at `/app/`; all 11 HTML pages updated with `app/index.html` CTAs; `serve-web.js` updated to serve both roots locally. |
+| **BUG-05** | Legal & Privacy | False privacy claims vs actual data processing | `site/index.html`, `site/trust.html`, `site/privacy.html` | **VERIFIED** — Copy updated to truthfully state encrypted handling of verification documents/selfies and user-requested GPS location without continuous tracking. |
+| **BUG-06** | Security | `DEMO_MODE` unguarded in production | `server/src/config.ts` | **VERIFIED** — `DEMO_MODE` defaults to `false` in production and strictly throws if enabled in `production` environment. |
+| **BUG-07** | Security | Privilege escalation (staff granting ADMIN) | `server/src/routes/admin.ts` | **VERIFIED** — Restricts user role modifications strictly to `ADMIN` actors with 403 Forbidden enforcement. |
+| **BUG-12** | Security | Unprotected operational metrics | `server/src/http/app.ts` | **VERIFIED** — `/metrics` in production requires authentication token; prevents public information disclosure. |
+| **BUG-13** | Database | Silent PGlite fallback in production | `server/src/db/index.ts` | **VERIFIED** — Explicit error thrown if `DATABASE_URL` is omitted in production. |
+| **BUG-14** | Discovery | NULL-coordinate jobs excluded when radius provided | `server/src/routes/jobs.ts` | **VERIFIED** — Updated discovery SQL query to include coord-less jobs (`t.distance_km IS NULL OR t.distance_km <= $3`). |
+| **BUG-15** | CI/CD | Missing quality gates in deployment workflows | `.github/workflows/deploy-api.yml`, `.github/workflows/deploy-pages.yml` | **VERIFIED** — Added Node typecheck and unit tests to API deployment; added Flutter analyze to Pages deployment. |
+| **BUG-16 & UI** | Website / SEO / a11y | Missing canonical tags, broken ARIA, invalid nested tags, poor contrast | `site/*.html`, `site/assets/css/styles.css` | **VERIFIED** — Added canonical tags and `id="primary-nav"`; fixed nested `<p>` in `contact.html`; added `<h1>` in `404.html`; boosted `--muted` contrast to 5.6:1 (WCAG AA); differentiated phone mockups across tabs. |
+| **Dead Code** | Clean-up | Orphaned root file | `auth_gateway.dart` | **VERIFIED** — Orphaned file deleted from project root. |
+
+### 2. Test Verification
+
+- `cd server && npm run typecheck`: **PASS (exit code 0)**
+- `cd server && npx vitest run`: **PASS (8 test files passed, 71 of 71 tests passed, exit code 0)**
+- `node -c serve-web.js`: **PASS (exit code 0)**

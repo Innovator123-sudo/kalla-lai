@@ -12,7 +12,7 @@ import { newId } from '../lib/crypto.js';
 import { errors } from '../lib/errors.js';
 import { asyncHandler } from '../lib/http.js';
 import { notify } from '../lib/notify.js';
-import { cacheGet, cacheSet } from '../lib/cache.js';
+import { cacheGet, cacheSet, bumpDiscoveryGeneration, getDiscoveryGeneration } from '../lib/cache.js';
 import { sha256 } from '../lib/crypto.js';
 import { jobDto, offerDto, shiftDto } from '../lib/serializers.js';
 import { parseBody, parseQuery, idempotent } from '../lib/validation.js';
@@ -315,6 +315,7 @@ router.post(
     });
 
     const recipients = await matchingWorkerIds(job.required_skills ?? []);
+    bumpDiscoveryGeneration();
     for (const workerId of recipients) {
       hub.publish([workerId], 'job.published', { type: 'job', id: job.id }, {
         role: job.role,
@@ -376,6 +377,7 @@ router.post(
         correlationId: req.requestId,
       });
     });
+    bumpDiscoveryGeneration();
     res.json({ job: jobDto(await loadJob(job.id), { exactLocation: true }) });
   }),
 );
@@ -398,7 +400,7 @@ router.get(
     const lng = query.lng === undefined ? null : Math.round(query.lng * 1000) / 1000;
     const radius = query.lat !== undefined ? query.radiusKm : null;
 
-    const cacheKey = `discovery:v2:${sha256(
+    const cacheKey = `discovery:v2:gen${getDiscoveryGeneration()}:${sha256(
       JSON.stringify([
         lat,
         lng,
@@ -442,7 +444,7 @@ router.get(
             AND ($6::bigint IS NULL OR j.rate_npr >= $6::bigint)
             AND ($7::text IS NULL OR j.work_mode = $7::text)
        ) t
-       WHERE ($3::float8 IS NULL OR t.distance_km <= $3::float8)
+       WHERE ($3::float8 IS NULL OR t.distance_km IS NULL OR t.distance_km <= $3::float8)
        ORDER BY CASE WHEN t.distance_km IS NULL THEN 1 ELSE 0 END,
                 t.distance_km ASC NULLS LAST, t.published_at DESC
        LIMIT $8 OFFSET $9`,

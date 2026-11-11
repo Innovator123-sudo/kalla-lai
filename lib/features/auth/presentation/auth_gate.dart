@@ -74,9 +74,7 @@ class _AuthGateState extends State<AuthGate> {
                 return const MainShellScreen();
               }
 
-              // Proceed directly to the sign-in / registration screen. Role
-              // choice (Worker vs Employer/Hirer) is confirmed only once during
-              // account creation or Google sign-in.
+              // Proceed directly to the sign-in / registration screen.
               return const LoginScreen();
             },
           );

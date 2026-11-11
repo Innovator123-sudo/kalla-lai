@@ -22,7 +22,9 @@ function arg(name, fallback) {
 
 const PORT = Number(arg('port', 7358));
 const API_PORT = Number(arg('api', 8090));
-const ROOT = path.resolve(__dirname, 'build', 'web');
+const SITE_ROOT = path.resolve(__dirname, 'site');
+const APP_ROOT = path.resolve(__dirname, 'build', 'web');
+const ROOT = fs.existsSync(SITE_ROOT) ? SITE_ROOT : APP_ROOT;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -80,10 +82,11 @@ function sendFile(res, filePath, req) {
   const ext = path.extname(filePath).toLowerCase();
   const type = MIME[ext] || 'application/octet-stream';
   const stat = fs.statSync(filePath);
+  const isHashed = /\.[a-f0-9]{8,}\./i.test(filePath) || filePath.includes('flutter_service_worker.js') || filePath.includes('canvaskit');
   const headers = {
     'content-type': type,
     'accept-ranges': 'bytes',
-    'cache-control': 'no-cache',
+    'cache-control': isHashed ? 'public, max-age=31536000, immutable' : 'no-cache',
   };
 
   // Range support matters for <video> playback.
@@ -133,9 +136,18 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Resolve inside ROOT only.
-  let filePath = path.join(ROOT, pathname);
-  if (!filePath.startsWith(ROOT)) {
+  // Route /app and /app/* to the Flutter web app (APP_ROOT), and everything
+  // else to the marketing site (SITE_ROOT) with fallback to APP_ROOT.
+  let targetRoot = ROOT;
+  let targetPathname = pathname;
+  if (pathname === '/app' || pathname.startsWith('/app/')) {
+    targetRoot = APP_ROOT;
+    targetPathname = pathname.slice(4) || '/';
+  }
+
+  // Resolve inside targetRoot only.
+  let filePath = path.join(targetRoot, targetPathname);
+  if (!filePath.startsWith(targetRoot)) {
     res.writeHead(403).end('Forbidden');
     return;
   }
@@ -145,7 +157,7 @@ const server = http.createServer((req, res) => {
   }
   if (!fs.existsSync(filePath)) {
     // SPA fallback for client-side routes.
-    const fallback = path.join(ROOT, 'index.html');
+    const fallback = path.join(targetRoot, 'index.html');
     if (fs.existsSync(fallback)) {
       sendFile(res, fallback, req);
     } else {

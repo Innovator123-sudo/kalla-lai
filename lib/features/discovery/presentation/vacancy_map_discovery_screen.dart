@@ -455,18 +455,25 @@ class _MapAndJobSheet extends StatelessWidget {
                       ),
                     ),
                     Expanded(
-                      child: ListView.separated(
-                        controller: controller,
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-                        itemCount: jobs.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder:
-                            (context, index) => _JobListTile(
-                              job: jobs[index],
-                              isSaved: savedJobIds.contains(jobs[index].id),
-                              onToggleSaved: () => onToggleSaved(jobs[index]),
-                              onTap: () => _openJob(context, jobs[index]),
-                            ),
+                      child: RefreshIndicator(
+                        onRefresh:
+                            () => context
+                                .read<VacancyDiscoveryCubit>()
+                                .load(),
+                        child: ListView.separated(
+                          controller: controller,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                          itemCount: jobs.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          itemBuilder:
+                              (context, index) => _JobListTile(
+                                job: jobs[index],
+                                isSaved: savedJobIds.contains(jobs[index].id),
+                                onToggleSaved: () => onToggleSaved(jobs[index]),
+                                onTap: () => _openJob(context, jobs[index]),
+                              ),
+                        ),
                       ),
                     ),
                   ],

@@ -22,10 +22,10 @@ flutter pub get
 # Or simply double-click start-local.bat for the local API (:8090) + web app (:7358)
 ```
 
-The API lives in `server/`. See [README.md](README.md) for Supabase, Firebase and Veriff configuration. Build the public website with:
+The API lives in `server/`. See [README.md](README.md) for Supabase, Firebase and Veriff configuration. The published site **is** the app, so build exactly what GitHub Pages serves with:
 
 ```powershell
-python tools/build_site.py
+flutter build web --release --base-href /kalla-lai/
 ```
 
 ## Making a change
@@ -36,8 +36,8 @@ python tools/build_site.py
 4. Run the checks that apply to your change:
    - `flutter analyze` and `flutter test`
    - `npm test` / `npm run build` inside `server/`
-   - open the generated site at desktop and 390 px widths
-5. Update documentation when behaviour changes — especially the [roadmap](https://innovator123-sudo.github.io/kalla-lai/roadmap.html) and [trust page](https://innovator123-sudo.github.io/kalla-lai/trust.html) if a capability becomes live.
+   - open the built web app at desktop and 390 px widths
+5. Update documentation when behaviour changes — especially [`startup/README.md`](startup/README.md) if a capability becomes live.
 6. Open a pull request using the template and describe **how you verified it**.
 
 ## Code conventions
@@ -45,7 +45,7 @@ python tools/build_site.py
 - **Dart:** follow `analysis_options.yaml`; keep Cubits free of widget code; use the existing theme tokens rather than hardcoded colours.
 - **TypeScript:** strict mode, structured errors, permission checks on every route, idempotency on state changes.
 - **SQL:** additive, versioned migrations in `server/src/db/migrations/`; never edit an applied migration.
-- **Website:** edit `tools/build_site.py`, never the generated `site/*.html` files directly.
+- **Pages:** the deployed site is the Flutter app itself. `site/` holds only the hand-edited privacy notice and terms, so edit those two files directly.
 - **Never commit** `.env`, service-account JSON, private keys, database passwords, provider secrets or real user data. See [SECURITY.md](SECURITY.md).
 
 ## Commit messages

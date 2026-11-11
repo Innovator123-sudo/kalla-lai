@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://innovator123-sudo.github.io/kalla-lai/sitemap.xml

@@ -1,4 +1,4 @@
-name: Deploy Flutter web to GitHub Pages
+name: Deploy to GitHub Pages (Flutter app)
 
 on:
   push:
@@ -19,21 +19,65 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.47.9
           channel: stable
           cache: true
-      - run: flutter pub get
-      - run: |
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Analyze (quality gate)
+        # Errors only. `flutter analyze` treats info/warning diagnostics as
+        # fatal by default, so pre-existing lint debt would block the deploy
+        # while adding nothing: `flutter build web` below is the real
+        # "does it compile" gate.
+        run: flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings
+        continue-on-error: false
+
+      - name: Build Flutter web app at the Pages root
+        # The app *is* the site. No marketing pages sit in front of it any
+        # more, so the base href is the repository root rather than /app/.
+        run: |
           flutter build web --release \
             --base-href "/kalla-lai/" \
             --dart-define=KALLALAI_LIVE_API=true \
             --dart-define=KALLALAI_API_URL=https://kalla-lai-api.vercel.app \
             --dart-define=KALLALAI_GOOGLE_WEB_CLIENT_ID=${{ vars.GOOGLE_WEB_CLIENT_ID }}
+
+      - name: Assemble the Pages artifact
+        run: |
+          mkdir -p dist
+          # Opening the site now starts the app directly.
+          cp -r build/web/. dist/
+
+          # Old /app/ links (bookmarks, docs, printed QR codes) still resolve.
+          mkdir -p dist/app
+          cat > dist/app/index.html <<'HTML'
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>Kalla-Lai</title>
+          <meta http-equiv="refresh" content="0; url=../">
+          <script>location.replace('../');</script>
+          <a href="../">Open Kalla-Lai</a>
+          HTML
+
+          # Privacy and terms keep their existing URLs: they are registered
+          # with Google (OAuth consent screen) and cited in the docs. Their
+          # css/js/img folders merge into the app's asset folder, which has no
+          # css/, js/ or img/ directory of its own.
+          cp site/privacy.html site/terms.html dist/
+          cp -r site/assets/. dist/assets/
+
+          printf 'User-agent: *\nAllow: /\n' > dist/robots.txt
+          # Stop GitHub Pages from running Jekyll over the Flutter asset paths.
+          touch dist/.nojekyll
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: build/web
+          path: dist
 
   deploy:
     needs: build

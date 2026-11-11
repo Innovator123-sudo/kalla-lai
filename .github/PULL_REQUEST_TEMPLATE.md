@@ -8,7 +8,7 @@ What does this change do, and why? Link the related issue if there is one.
 - [ ] New feature
 - [ ] Refactor / internal cleanup
 - [ ] Documentation
-- [ ] Website (`tools/build_site.py`)
+- [ ] Website / deployment (`.github/workflows/deploy-pages.yml`)
 - [ ] Infrastructure / deployment
 
 ## How I verified it
@@ -19,7 +19,7 @@ Be specific — commands run, screens checked, devices/browsers used:
 flutter analyze
 flutter test
 cd server && npm run build && npm test
-python tools/build_site.py
+flutter build web --release --base-href /kalla-lai/
 ```
 
 - [ ] Desktop browser
@@ -39,7 +39,7 @@ If this touches verification, payments, shifts, reputation or disputes:
 
 - [ ] Focused change, one concern per PR
 - [ ] Tests added or updated
-- [ ] Docs / roadmap / trust page updated where behaviour changed
+- [ ] Docs / startup kit updated where behaviour changed
 - [ ] No `.env`, service-account JSON, private keys, passwords or real user data committed
-- [ ] Generated website files came from `python tools/build_site.py`, not hand edits
+- [ ] `site/privacy.html` and `site/terms.html` are hand-edited — they have no generator any more
 - [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md)

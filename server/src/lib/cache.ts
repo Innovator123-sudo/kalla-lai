@@ -83,6 +83,16 @@ export async function cacheSet(key: string, value: string, ttlSeconds: number): 
   }
 }
 
+let discoveryGeneration = 1;
+
+export function bumpDiscoveryGeneration(): void {
+  discoveryGeneration++;
+}
+
+export function getDiscoveryGeneration(): number {
+  return discoveryGeneration;
+}
+
 export async function closeCache(): Promise<void> {
   if (!client) return;
   try {

@@ -145,21 +145,17 @@ class _SurveyScreenState extends State<SurveyScreen> {
     };
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          tooltip: _step == 0 ? 'Back to choice' : 'Previous question',
-          onPressed: () {
-            if (_step == 0) {
-              context.read<EntryJourneyCubit>().changeIntent();
-            } else {
-              setState(() => _step -= 1);
-            }
-          },
-          icon: const Icon(Icons.arrow_back),
-        ),
+        leading: _step > 0
+            ? IconButton(
+                tooltip: 'Previous question',
+                onPressed: () => setState(() => _step -= 1),
+                icon: const Icon(Icons.arrow_back),
+              )
+            : null,
       ),
       body: SafeArea(
         top: false,

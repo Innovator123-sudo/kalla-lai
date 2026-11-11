@@ -5,13 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy notice — Kalla-Lai</title>
 <meta name="description" content="Plain-language draft privacy notice for the Kalla-Lai marketplace: what is collected, how verification works, and your choices.">
+<link rel="canonical" href="https://innovator123-sudo.github.io/kalla-lai/privacy.html">
 <meta name="theme-color" content="#101a3a">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Kalla-Lai">
 <meta property="og:title" content="Privacy notice — Kalla-Lai">
 <meta property="og:description" content="Plain-language draft privacy notice for the Kalla-Lai marketplace: what is collected, how verification works, and your choices.">
-<meta property="og:image" content="assets/img/og-cover.svg">
+<meta property="og:url" content="https://innovator123-sudo.github.io/kalla-lai/privacy.html">
+<meta property="og:image" content="https://innovator123-sudo.github.io/kalla-lai/assets/img/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Kalla-Lai — work, verified.">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Privacy notice — Kalla-Lai">
+<meta name="twitter:description" content="Plain-language draft privacy notice for the Kalla-Lai marketplace: what is collected, how verification works, and your choices.">
+<meta name="twitter:image" content="https://innovator123-sudo.github.io/kalla-lai/assets/img/og-cover.png">
+<meta name="robots" content="index,follow">
 <link rel="icon" type="image/png" href="assets/img/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,9 +45,9 @@ setTimeout(function () {
     <a class="brand" href="index.html" aria-label="Kalla-Lai home">
       <img src="assets/img/kalla_lai_logo.png" alt="Kalla-Lai" width="150" height="40">
     </a>
-    <nav class="nav__links" aria-label="Main navigation"><a href="index.html#product">Product</a><a href="index.html#how">How it works</a><a href="index.html#audiences">For workers</a><a href="trust.html">Trust & safety</a><a href="roadmap.html">Roadmap</a><a href="investors.html">Investors</a><a href="about.html">About</a></nav>
+    <nav class="nav__links" id="primary-nav" aria-label="Main navigation"><a href="index.html#product">Product</a><a href="index.html#how">How it works</a><a href="index.html#audiences">For workers</a><a href="trust.html">Trust & safety</a><a href="roadmap.html">Roadmap</a><a href="investors.html">Investors</a><a href="about.html">About</a></nav>
     <div class="nav__actions">
-      <a class="btn btn--primary btn--sm" href="app/">Launch the app <span class="arrow">→</span></a>
+      <a class="btn btn--primary btn--sm" href="app/index.html">Launch the app <span class="arrow">→</span></a>
     </div>
     <button class="nav__toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="primary-nav"><span></span></button>
   </div>
@@ -58,12 +67,19 @@ setTimeout(function () {
     <li><strong>Account data:</strong> email address, display name, role (worker or employer), and a hashed password credential or a Firebase identity token.</li>
     <li><strong>Profile data:</strong> skills, area or city, languages, bio, portfolio links, organisation details and optional profile media. We ask for an area, not a home street address.</li>
     <li><strong>Marketplace data:</strong> requisitions, applications, shift and attendance states, reviews, dispute records and ledger entries.</li>
+    <li><strong>Location:</strong> if you ask the app to use your location, your device position is read once, at high accuracy, so nearby work can be sorted by distance. Public discovery responses round coordinates to roughly 100 m, and the street address of a job is only returned to the employer who posted it. There is no background or continuous location tracking.</li>
     <li><strong>Technical data:</strong> access and refresh tokens, request metadata needed for security and reliability, and locally stored preferences (theme, language, notification setting, API endpoint override).</li>
   </ul>
   <h2>3. Identity verification</h2>
-  <p>Document, selfie and liveness checks are performed by a specialist hosted provider. Kalla-Lai does <strong>not</strong> receive or store identity-document images, face templates or OCR payloads. We keep a session reference, the consent version and time, and the provider's decision state. Verification is only reflected in the app after an HMAC-signed provider webhook confirms approval. The provider's own privacy notice governs its processing.</p>
+  <p>Verification only runs after you give explicit consent. You send a photo of your identity document and a selfie over HTTPS. The check covers the document type, the text printed on the document (OCR), the name match, face comparison and liveness.</p>
+  <ul>
+    <li><strong>Not stored:</strong> the document photo, the selfie, and any face or biometric template. The images are used for the check and then discarded — they are not written to our database or to any object store.</li>
+    <li><strong>Stored:</strong> the decision (verified or needs action), the document type, the match scores, the consent version and time, and the <em>text fields read from the document</em>, which can include your name, document number, date of birth and the address printed on the document.</li>
+    <li><strong>If a hosted provider is configured</strong> to perform the check instead, Kalla-Lai keeps only the provider session reference, the consent record and the decision. That provider's own privacy notice governs its processing.</li>
+  </ul>
+  <p>A verified badge or a verified account state is only reflected in the app after a signed confirmation of the decision. A completed check session on its own is never treated as proof.</p>
   <h2>4. What we do not do</h2>
-  <ul><li>We do not sell personal data or use it for advertising.</li><li>We do not claim a worker is verified, a job is published or money has moved without an authoritative confirmation.</li><li>We do not request precise home addresses or continuous location tracking in the current product.</li></ul>
+  <ul><li>We do not sell personal data or use it for advertising.</li><li>We do not claim a worker is verified, a job is published or money has moved without an authoritative confirmation.</li><li>We do not keep your ID photos, your selfie, face templates or a home street address.</li><li>We do not track you continuously or in the background. Your position is read once, at high accuracy, only when you ask the app to use it.</li></ul>
   <h2>5. Where data lives</h2>
   <p>The API uses a managed Postgres database (Supabase) and a hosted deployment. Locally stored preferences and session tokens are kept in your browser's storage so you stay signed in. Signing out clears the saved session on that device.</p>
   <h2>6. Retention and deletion</h2>
@@ -79,7 +95,7 @@ setTimeout(function () {
       <div class="footer__brand">
         <img src="assets/img/kalla_lai_logo_white.png" alt="Kalla-Lai">
         <p>Work, verified. A trusted marketplace where independent workers and employers find each other, agree on the shift, and get paid with confidence.</p>
-        <p style="margin-top:16px"><a class="btn btn--amber btn--sm" href="app/">Open the app <span class="arrow">→</span></a></p>
+        <p style="margin-top:16px"><a class="btn btn--amber btn--sm" href="app/index.html">Open the app <span class="arrow">→</span></a></p>
       </div>
       <div>
         <h4>Product</h4>

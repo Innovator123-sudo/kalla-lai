@@ -57,6 +57,11 @@ export async function initDb(): Promise<void> {
 
   // Local / test mode without Docker: run a real PostgreSQL engine compiled to
   // WebAssembly (PGlite). Production always uses DATABASE_URL -> PostgreSQL.
+  if (config.NODE_ENV === 'production') {
+    throw new Error(
+      'DATABASE_URL must be set in production — refusing to fall back to in-process PGlite.',
+    );
+  }
   if (config.PGLITE_PATH !== 'memory://') {
     mkdirSync(path.dirname(config.PGLITE_PATH), { recursive: true });
   }

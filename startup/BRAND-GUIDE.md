@@ -126,11 +126,11 @@ Use short sentences. Prefer concrete nouns over adjectives. Avoid startup jargon
 
 ---
 
-## 9. Applying the brand to a new page
+## 9. Applying the brand in new work
 
-1. Add the page to `tools/build_site.py` with `page(filename, title, description, body, active=...)`.
-2. Use the shared `nav()` / `footer()` automatically injected by `page()`.
-3. Reuse `section_head()`, `card()`, `icon()` and `phone_markup()` helpers.
-4. Run `python tools/build_site.py`.
-5. Add the URL to `sitemap.xml` generation in the same script.
-6. Verify locally with a browser at both desktop and 390 px widths.
+The Pages site is the Flutter app, so brand work now happens inside the app.
+
+1. Reuse the `KallaLaiTokens` theme extension in `lib/core/theme/kalla_lai_theme.dart` instead of hardcoding colours.
+2. Follow the type scale, spacing, contrast and icon rules above.
+3. The two hand-maintained legal pages (`site/privacy.html`, `site/terms.html`) share `site/assets/css/styles.css`; keep using its existing classes.
+4. Verify in a browser at desktop and 390 px widths, and re-run the affected flow if behaviour changed.

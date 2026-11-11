@@ -116,6 +116,9 @@ export function createApp() {
         res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Metrics token required.' } });
         return;
       }
+    } else if (config.NODE_ENV === 'production') {
+      res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Metrics token required in production.' } });
+      return;
     }
     res.setHeader('content-type', registry.contentType);
     res.send(await registry.metrics());

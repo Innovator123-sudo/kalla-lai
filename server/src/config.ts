@@ -74,7 +74,7 @@ const schema = z.object({
   PAYMENT_WEBHOOK_SECRET: z.string().default('dev-only-webhook-secret'),
   METRICS_TOKEN: z.string().optional(),
   TRUST_PROXY: bool(false),
-  DEMO_MODE: bool(true),
+  DEMO_MODE: bool(process.env.NODE_ENV !== 'production'),
   MIN_APP_VERSION: z
     .string()
     .regex(/^\d+\.\d+\.\d+$/, 'MIN_APP_VERSION must look like 1.4.2')
@@ -97,6 +97,9 @@ export const config: Config = (() => {
     }
     if (parsed.data.PAYMENT_WEBHOOK_SECRET === 'dev-only-webhook-secret') {
       throw new Error('PAYMENT_WEBHOOK_SECRET must be set in production');
+    }
+    if (parsed.data.DEMO_MODE) {
+      throw new Error('DEMO_MODE must be false (or unset) in production — set DEMO_MODE=false in your environment');
     }
     if (!parsed.data.FIREBASE_PROJECT_ID) {
       throw new Error('FIREBASE_PROJECT_ID must be set in production');

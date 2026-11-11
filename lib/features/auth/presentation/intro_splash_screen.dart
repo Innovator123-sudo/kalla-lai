@@ -1,11 +1,18 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:kalla_lai/core/widgets/loading_animation.dart'
     show initializeIntroVideo;
 import 'package:video_player/video_player.dart';
 
+/// Plays the intro clip once, centred on a white page inside a thin black
+/// frame, then hands over to [onFinished].
+///
+/// The clip *is* the intro: this screen never swaps it for a different
+/// animation, and never cuts it short on a value it cannot trust.
+/// `video_player` derives `isCompleted` from `position == duration`, which is
+/// also true for the first moments of a freshly created player (both are
+/// zero), so the clip's own end position is compared instead.
 class IntroSplashScreen extends StatefulWidget {
   const IntroSplashScreen({required this.onFinished, super.key});
 
@@ -15,98 +22,191 @@ class IntroSplashScreen extends StatefulWidget {
   State<IntroSplashScreen> createState() => _IntroSplashScreenState();
 }
 
-class _IntroSplashScreenState extends State<IntroSplashScreen>
-    with SingleTickerProviderStateMixin {
+class _IntroSplashScreenState extends State<IntroSplashScreen> {
+  /// How long a freshly started clip gets to prove it is running.
+  static const Duration _startTimeout = Duration(milliseconds: 1500);
+
+  /// How close to the last frame counts as "the clip finished".
+  static const Duration _endTolerance = Duration(milliseconds: 150);
+
+  /// Attempts on the *same* clip before the app takes over. Retrying the clip
+  /// keeps the intro identical; anything else would be a second, unintended
+  /// intro.
+  static const int _maxAttempts = 6;
+
+  /// Growing pause before each retry (index 0 is the pause after attempt 1).
+  ///
+  /// A start most often fails because of a momentary network or CDN hiccup, so
+  /// backing off for a few seconds brings the clip up instead of skipping the
+  /// intro. The last entry repeats for any remaining attempt, and
+  /// [_hardDeadline] remains the absolute backstop.
+  static const List<Duration> _retryDelays = <Duration>[
+    Duration(milliseconds: 400),
+    Duration(milliseconds: 700),
+    Duration(milliseconds: 1000),
+    Duration(milliseconds: 1500),
+    Duration(milliseconds: 2000),
+  ];
+
+  /// Absolute backstop, so nothing here can strand the visitor on the intro.
+  static const Duration _hardDeadline = Duration(seconds: 20);
+
+  /// Frame shape used before the clip's first frame reaches the screen. It
+  /// mirrors the shipped asset (`assets/videos/video_1083905.mp4`, which is
+  /// 768x1344 portrait) so the black outline never jumps.
+  static const Size _fallbackVideoSize = Size(768, 1344);
+
   VideoPlayerController? _controller;
   bool _finished = false;
-  bool _videoFailed = false;
-  bool _loadingVideo = false;
-  bool _soundOn = false;
+  bool _starting = false;
+  int _attempts = 0;
   Timer? _watchdog;
-  final DateTime _startedAt = DateTime.now();
-
-  void _checkDeadline() {
-    if (!_finished &&
-        DateTime.now().difference(_startedAt) > const Duration(seconds: 20)) {
-      _finish();
-    }
-  }
-
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1300),
-  );
 
   @override
   void initState() {
     super.initState();
-    _pulse
-      ..addListener(_checkDeadline)
-      ..repeat(reverse: true);
-    _watchdog = Timer(const Duration(seconds: 20), _finish);
-    _initializeVideo();
+    _watchdog = Timer(_hardDeadline, _finish);
+    unawaited(_start());
   }
 
-  Future<void> _initializeVideo() async {
-    if (_loadingVideo) return;
-    _loadingVideo = true;
-    _videoFailed = false;
-    final previous = _controller;
-    _controller = null;
-    if (previous != null) {
-      previous
-        ..removeListener(_handleVideoUpdate)
-        ..dispose();
-    }
+  /// Starts the clip, retrying the same source when a start cannot be
+  /// confirmed. Each attempt replaces the previous player, so a browser that
+  /// killed the first one still gets the identical intro.
+  Future<void> _start() async {
+    if (_finished || _starting) return;
+    _starting = true;
+    _detachController();
     if (mounted) setState(() {});
+
+    VideoPlayerController? controller;
     try {
-      final controller = await initializeIntroVideo();
-      if (!mounted) {
-        await controller.dispose();
-        return;
-      }
-      _controller = controller;
-      controller
-        ..setLooping(false)
-        ..setVolume(0) // Always start muted — browser autoplay policy requires it
-        ..addListener(_handleVideoUpdate);
-
-      await controller.play();
-      if (!mounted) return;
-      _loadingVideo = false;
-      setState(() {});
-
-      // Give the player 700 ms to confirm it started.
-      await Future<void>.delayed(const Duration(milliseconds: 700));
-      if (!mounted) return;
-      if (!controller.value.hasError && !controller.value.isPlaying) {
-        _videoFailed = true;
-        _loadingVideo = false;
-        setState(() {});
-      }
+      controller = await initializeIntroVideo();
     } catch (_) {
-      if (!mounted) return;
-      _loadingVideo = false;
-      _videoFailed = true;
-      setState(() {});
+      controller = null;
     }
+    if (!mounted || _finished) {
+      await controller?.dispose();
+      return;
+    }
+    if (controller == null) {
+      _retryOrGiveUp();
+      return;
+    }
+
+    _controller = controller;
+    controller
+      ..setLooping(false)
+      ..addListener(_handleVideoUpdate);
+    if (mounted) setState(() {});
+
+    await _play(controller);
+    if (!mounted || _finished || !identical(_controller, controller)) return;
+
+    await Future<void>.delayed(_startTimeout);
+    if (!mounted || _finished || !identical(_controller, controller)) return;
+
+    // Confirmed only when the clip is genuinely running. `isPlaying` alone is
+    // enough to know the browser accepted the play() call, and a position that
+    // already moved proves frames are being produced.
+    final value = controller.value;
+    if (value.isPlaying || value.position > Duration.zero) {
+      _starting = false;
+      _attempts = 0;
+      if (mounted) setState(() {});
+      return;
+    }
+    _retryOrGiveUp();
+  }
+
+  Future<void> _play(VideoPlayerController controller) async {
+    try {
+      // Preferred path: the intro clip starts with its soundtrack.
+      await controller.setVolume(1.0);
+      await controller.play();
+    } catch (_) {
+      // Browsers refuse unmuted autoplay until the visitor interacts, so fall
+      // back to muted playback and let the first tap or key press unmute it
+      // (the GestureDetector below and web/index.html both do that). Unmuting
+      // here instead would make Chrome pause the clip again and the intro
+      // would look like it failed to start.
+      try {
+        await controller.setVolume(0);
+        await controller.play();
+      } catch (_) {}
+    }
+  }
+
+  void _retryOrGiveUp() {
+    _starting = false;
+    if (_finished) return;
+    _attempts++;
+    if (_attempts >= _maxAttempts) {
+      // Every attempt failed. Hand over to the app rather than showing some
+      // other animation: the intro must only ever be the clip.
+      _finish();
+      return;
+    }
+    unawaited(Future<void>.delayed(_retryDelay(_attempts), _start));
+  }
+
+  /// Pause to take before attempt number [attempt] (1-based).
+  static Duration _retryDelay(int attempt) {
+    final index = attempt - 1;
+    if (index >= _retryDelays.length) return _retryDelays.last;
+    return _retryDelays[index];
   }
 
   void _handleVideoUpdate() {
     final controller = _controller;
     if (controller == null) return;
-    if (controller.value.hasError) {
-      Future<void>.delayed(const Duration(milliseconds: 900), _finish);
+    final value = controller.value;
+    if (value.hasError) {
+      // Restart the same clip instead of ending the intro on the error: a
+      // player that dies must not turn into a different intro or an early
+      // jump into the app.
+      unawaited(Future<void>.microtask(() => _restartAfterError(controller)));
       return;
     }
-    if (controller.value.isCompleted) _finish();
+    final duration = value.duration;
+    // `isCompleted` is `position == duration`, which is also true before the
+    // clip has any metadata (both zero). Finishing on that is what skipped
+    // the intro on a reload, so require real progress towards a real end.
+    if (duration <= Duration.zero || value.position <= Duration.zero) return;
+    if (value.isCompleted) {
+      _finish();
+      return;
+    }
+    if (duration - value.position <= _endTolerance) _finish();
   }
 
-  void _toggleSound() {
+  /// Restarts the clip after its player died.
+  ///
+  /// [controller] is the player that reported the error, so a late callback
+  /// from a player that has already been replaced cannot restart the intro on
+  /// top of the clip that replaced it.
+  void _restartAfterError(VideoPlayerController controller) {
+    if (_finished || !identical(_controller, controller)) return;
+    _detachController();
+    _retryOrGiveUp();
+  }
+
+  void _detachController() {
     final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) return;
-    setState(() => _soundOn = !_soundOn);
-    controller.setVolume(_soundOn ? 1.0 : 0);
+    _controller = null;
+    if (controller == null) return;
+    controller
+      ..removeListener(_handleVideoUpdate)
+      ..dispose();
+  }
+
+  /// The first tap anywhere is the browser's cue to unlock sound.
+  void _unmute() {
+    final controller = _controller;
+    if (controller == null) return;
+    controller.setVolume(1.0);
+    if (!controller.value.isPlaying && !controller.value.isCompleted) {
+      controller.play();
+    }
   }
 
   void _finish() {
@@ -120,69 +220,48 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
   void dispose() {
     _watchdog?.cancel();
     _finished = true;
-    _pulse.dispose();
-    final controller = _controller;
-    if (controller != null) {
-      controller
-        ..removeListener(_handleVideoUpdate)
-        ..dispose();
-    }
+    _detachController();
     super.dispose();
   }
 
-  Widget _buildVideo(VideoPlayerController controller) {
-    return ClipRect(
-      child: SizedBox.expand(
-        child: FittedBox(
-          fit: BoxFit.cover,
-          clipBehavior: Clip.hardEdge,
-          child: SizedBox(
-            width: controller.value.size.width,
-            height: controller.value.size.height,
-            child: VideoPlayer(controller),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFallbackLogo(double logoWidth) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ScaleTransition(
-            scale: Tween<double>(begin: 0.96, end: 1.04).animate(
-              CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: logoWidth, maxHeight: 180),
-              child: Image(
-                image: const AssetImage('assets/images/kalla_lai_logo.png'),
-                fit: BoxFit.contain,
-                width: logoWidth,
-                semanticLabel: 'कल्ला-लाई',
+  /// Centres the clip on the white page inside a thin black frame.
+  ///
+  /// The frame keeps the clip's own aspect ratio and is held away from the
+  /// page edges, so the clip's white borders no longer sit mid-screen where
+  /// they read as a stray "dividing line" across the page.
+  Widget _buildFrame({Size? videoSize}) {
+    final size = (videoSize == null || videoSize.isEmpty)
+        ? _fallbackVideoSize
+        : videoSize;
+    final controller = _controller;
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 740),
+          child: AspectRatio(
+            aspectRatio: size.width / size.height,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.black, width: 2),
+              ),
+              child: ClipRect(
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  clipBehavior: Clip.hardEdge,
+                  child: SizedBox(
+                    width: size.width,
+                    height: size.height,
+                    child: controller == null
+                        ? const SizedBox.shrink()
+                        : VideoPlayer(controller),
+                  ),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 24),
-          if (_loadingVideo)
-            const SizedBox(
-              width: 26,
-              height: 26,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else if (_videoFailed) ...[
-            const Text('The intro video could not start.'),
-            const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: _initializeVideo,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry video'),
-            ),
-          ],
-          TextButton(onPressed: _finish, child: const Text('Skip intro')),
-        ],
+        ),
       ),
     );
   }
@@ -190,103 +269,21 @@ class _IntroSplashScreenState extends State<IntroSplashScreen>
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    final hasVideo =
-        controller != null && controller.value.isInitialized && !_videoFailed;
+    Size? videoSize;
+    if (controller != null && controller.value.isInitialized) {
+      videoSize = controller.value.size;
+    }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.white,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: _finish,
-        child: LayoutBuilder(
-          builder: (context, outer) {
-            final maxW = math.max(0.0, outer.maxWidth);
-            final maxH = math.max(0.0, outer.maxHeight);
-            final height = maxH;
-            final width = math.min(maxW, height * 9 / 16);
-            final logoWidth = math.max(80.0, math.min(width - 48, 320.0));
-
-            return Center(
-              child: SizedBox(
-                width: width,
-                height: height,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (hasVideo)
-                      _buildVideo(controller)
-                    else
-                      _buildFallbackLogo(logoWidth),
-
-                    // Sound toggle — top right, only shown when video is playing
-                    if (hasVideo)
-                      Positioned(
-                        top: 16,
-                        right: 16,
-                        child: SafeArea(
-                          child: GestureDetector(
-                            // Prevent tap bubbling to the full-screen skip handler
-                            onTap: () {
-                              _toggleSound();
-                            },
-                            behavior: HitTestBehavior.opaque,
-                            child: FilledButton.tonalIcon(
-                              onPressed: _toggleSound,
-                              style: FilledButton.styleFrom(
-                                backgroundColor:
-                                    Colors.black.withValues(alpha: 0.55),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              icon: Icon(
-                                _soundOn
-                                    ? Icons.volume_up_rounded
-                                    : Icons.volume_off_rounded,
-                                size: 18,
-                              ),
-                              label: Text(
-                                _soundOn ? 'Sound on' : 'Sound off',
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    // Skip intro — bottom centre
-                    Positioned(
-                      bottom: 20,
-                      left: 16,
-                      right: 16,
-                      child: SafeArea(
-                        child: Center(
-                          child: TextButton(
-                            onPressed: _finish,
-                            style: TextButton.styleFrom(
-                              foregroundColor:
-                                  Colors.white.withValues(alpha: 0.9),
-                              backgroundColor:
-                                  Colors.black.withValues(alpha: 0.35),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                            ),
-                            child: const Text('Skip intro'),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+        onTap: _unmute,
+        child: Container(
+          color: Colors.white,
+          width: double.infinity,
+          height: double.infinity,
+          child: _buildFrame(videoSize: videoSize),
         ),
       ),
     );

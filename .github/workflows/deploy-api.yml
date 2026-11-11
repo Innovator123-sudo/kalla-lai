@@ -27,6 +27,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: npm ci
+        working-directory: server
+
+      - name: Quality gate - Typecheck
+        run: npm run typecheck
+        working-directory: server
+
+      - name: Quality gate - Run tests
+        run: npm test
+        working-directory: server
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

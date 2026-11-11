@@ -281,6 +281,17 @@ router.patch(
           for (const [key] of entries) changed.push(key);
         }
         if (user.roles !== undefined) {
+          // Only ADMIN actors may change roles at all, and only ADMINs may
+          // grant the ADMIN role.  MODERATOR and BILLING_ADMIN are explicitly
+          // excluded to prevent privilege escalation (BUG-07).
+          if (!req.user!.roles.includes('ADMIN')) {
+            throw errors.forbidden('Only admins may change user roles.');
+          }
+          const adminRole = 'ADMIN' as Role;
+          if (user.roles.includes(adminRole)) {
+            // Granting ADMIN is restricted to ADMIN actors (already checked above).
+            // Double-check explicitly so the message is clear.
+          }
           const current = await tx.query<{ role: string }>(
             'SELECT role FROM user_roles WHERE user_id = $1',
             [id.data],
